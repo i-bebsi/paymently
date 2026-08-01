@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paymently Healthz Monitor</title>
+<style>
+  /* ── Palette reference instance ── */
+  .viz-root {
+    color-scheme: light;
+    /* Surfaces */
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    /* Ink tokens */
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    /* Grid & border */
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    /* Status palette */
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
+    --status-serious: #ec835a;
+    --status-critical:#d03b3b;
+    /* Sequential blue */
+    --seq-400:        #3987e5;
+    --seq-500:        #256abf;
+    /* Delta */
+    --delta-up:       #006300;
+    /* Surface gap */
+    --gap:            2px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --status-good:    #0ca30c;
+      --status-warning: #fab219;
+      --status-serious: #ec835a;
+      --status-critical:#d03b3b;
+      --seq-400:        #3987e5;
+      --seq-500:        #184f95;
+      --delta-up:       #0ca30c;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
+    --status-serious: #ec835a;
+    --status-critical:#d03b3b;
+    --seq-400:        #3987e5;
+    --seq-500:        #184f95;
+    --delta-up:       #0ca30c;
+  }
+
+  /* ── Global ── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page-plane);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+  .viz-root {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px; padding-bottom: 16px;
+    border-bottom: 1px solid var(--gridline);
+  }
+  header h1 {
+    font-size: 20px; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .status-dot {
+    display: inline-block; width: 12px; height: 12px;
+    border-radius: 50%; flex-shrink: 0;
+    background: var(--text-muted);
+    transition: background 0.3s;
+  }
+  .status-dot.up    { background: var(--status-good); }
+  .status-dot.down  { background: var(--status-critical); }
+  .status-dot.stale { background: var(--status-warning); }
+
+  .header-right {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 13px; color: var(--text-secondary);
+  }
+  .header-right .refresh {
+    font-variant-numeric: tabular-nums;
+  }
+  .theme-btn {
+    background: none; border: 1px solid var(--border);
+    color: var(--text-secondary); padding: 4px 8px;
+    border-radius: 4px; cursor: pointer; font-size: 12px;
+  }
+  .theme-btn:hover { background: var(--gridline); }
+
+  /* ── KPI Row (stat tiles) ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .stat-tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    display: flex; flex-direction: column; gap: 4px;
+    position: relative;
+  }
+  .stat-tile .label {
+    font-size: 12px; font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .stat-tile .value {
+    font-size: 36px; font-weight: 600; line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+  }
+  .stat-tile.success .value { color: var(--status-good); }
+  .stat-tile.failure .value { color: var(--status-critical); }
+  .stat-tile .sub {
+    font-size: 12px; color: var(--text-secondary);
+  }
+
+  /* ── Last check status bar ── */
+  .last-check {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 20px;
+    margin-bottom: 24px;
+    display: flex; align-items: center; gap: 12px;
+    font-size: 14px;
+  }
+  .last-check .http-code {
+    font-weight: 600; font-variant-numeric: tabular-nums;
+    padding: 2px 8px; border-radius: 4px;
+    font-size: 13px;
+  }
+  .http-code.code-2xx { background: var(--status-good); color: #fff; }
+  .http-code.code-4xx, .http-code.code-5xx { background: var(--status-critical); color: #fff; }
+
+  /* ── Tables ── */
+  .section-title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 8px; margin-top: 24px;
+  }
+  .section-title:first-of-type { margin-top: 0; }
+
+  table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+    font-size: 13px; margin-bottom: 12px;
+  }
+  thead th {
+    text-align: left; font-weight: 500;
+    color: var(--text-muted);
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--gridline);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  tbody td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--gridline);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--gridline); }
+  td.code {
+    font-weight: 600;
+  }
+  td.code.ok  { color: var(--status-good); }
+  td.code.err { color: var(--status-critical); }
+  td.msg {
+    max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--text-secondary);
+  }
+
+  /* ── Empty state ── */
+  .empty {
+    text-align: center; color: var(--text-muted);
+    padding: 40px 20px; font-size: 14px;
+  }
+
+  /* ── Pulse animation for live dot ── */
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(12,163,12,0.3); }
+    50%      { box-shadow: 0 0 0 6px rgba(12,163,12,0); }
+  }
+  .status-dot.up { animation: pulse 3s ease-in-out infinite; }
+
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    .kpi-row { grid-template-columns: 1fr; }
+    .viz-root { padding: 16px 12px 48px; }
+  }
+</style>
+</head>
+<body>
+<div class="viz-root" data-theme="light">
+
+  <!-- Header -->
+  <header>
+    <h1>
+      <span class="status-dot" id="liveDot"></span>
+      Paymently Healthz
+    </h1>
+    <div class="header-right">
+      Last check: <span class="refresh" id="lastCheckTime">—</span>
+      <button class="theme-btn" id="themeToggle" title="Toggle dark mode">☀︎ / ☾</button>
+    </div>
+  </header>
+
+  <!-- KPI Row -->
+  <div class="kpi-row">
+    <div class="stat-tile" id="tileTotal">
+      <span class="label">Total Checks</span>
+      <span class="value">—</span>
+    </div>
+    <div class="stat-tile success" id="tileSuccess">
+      <span class="label">Success</span>
+      <span class="value">—</span>
+      <span class="sub" id="subSuccess"></span>
+    </div>
+    <div class="stat-tile failure" id="tileFailure">
+      <span class="label">Failure</span>
+      <span class="value">—</span>
+      <span class="sub" id="subFailure"></span>
+    </div>
+  </div>
+
+  <!-- Last check status -->
+  <div class="last-check" id="lastCheckBar" style="display:none">
+    Last response:
+    <span class="http-code" id="lastHttpCode"></span>
+    <span id="lastMsg"></span>
+  </div>
+
+  <!-- Failures table -->
+  <div class="section-title">Failures <span style="font-weight:400;font-size:12px" id="failureCount"></span></div>
+  <table id="failureTable">
+    <thead>
+      <tr><th>Time</th><th>HTTP</th><th>Message</th></tr>
+    </thead>
+    <tbody id="failureBody">
+      <tr><td colspan="3" class="empty">No failures — all checks passing ✓</td></tr>
+    </tbody>
+  </table>
+
+  <!-- Recent checks table -->
+  <div class="section-title">Recent Checks</div>
+  <table id="recentTable">
+    <thead>
+      <tr><th>Time</th><th>Status</th><th>HTTP</th><th>Response</th></tr>
+    </thead>
+    <tbody id="recentBody">
+      <tr><td colspan="4" class="empty">Waiting for first check…</td></tr>
+    </tbody>
+  </table>
+
+</div>
+
+<script>
+/* ── Theme toggle ── */
+const root = document.querySelector('.viz-root');
+const btn = document.getElementById('themeToggle');
+let theme = localStorage.getItem('paymently-theme') || 'light';
+function applyTheme(t) {
+  theme = t;
+  root.setAttribute('data-theme', t);
+  localStorage.setItem('paymently-theme', t);
+}
+applyTheme(theme);
+btn.addEventListener('click', () => applyTheme(theme === 'light' ? 'dark' : 'light'));
+
+/* ── Data fetch ── */
+async function fetchStats() {
+  try {
+    const res = await fetch('/api/stats');
+    if (!res.ok) throw new Error('API error');
+    return await res.json();
+  } catch (e) { return null; }
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit',
+    day:'numeric', month:'short' });
+}
+
+function statusClass(code) {
+  if (code >= 200 && code < 300) return 'ok';
+  return 'err';
+}
+
+function render(data) {
+  if (!data) return;
+
+  const { total, success, failure, lastCheck, failures, recent } = data;
+
+  /* Stat tiles */
+  document.querySelector('#tileTotal .value').textContent = total || 0;
+  document.querySelector('#tileSuccess .value').textContent = success || 0;
+  document.querySelector('#tileFailure .value').textContent = failure || 0;
+  const rate = total > 0 ? Math.round((success / total) * 100) : 0;
+  document.getElementById('subSuccess').textContent = total > 0 ? `${rate}% uptime` : '';
+  document.getElementById('subFailure').textContent = failure > 0 ? `${failure} error(s)` : '';
+
+  /* Last check */
+  document.getElementById('lastCheckTime').textContent = lastCheck ? fmtTime(lastCheck.time) : '—';
+  const bar = document.getElementById('lastCheckBar');
+  const codeEl = document.getElementById('lastHttpCode');
+  const msgEl = document.getElementById('lastMsg');
+  const dot = document.getElementById('liveDot');
+  if (lastCheck) {
+    bar.style.display = 'flex';
+    const code = lastCheck.httpCode || 0;
+    codeEl.textContent = code;
+    codeEl.className = 'http-code ' + (code >= 200 && code < 300 ? 'code-2xx' : 'code-5xx');
+    const body = lastCheck.body || {};
+    msgEl.textContent = typeof body === 'string' ? body : (body.message || body.error || JSON.stringify(body).slice(0, 120));
+
+    /* Live dot */
+    dot.className = 'status-dot';
+    if (lastCheck.status === 'success') dot.classList.add('up');
+    else dot.classList.add('down');
+  } else {
+    dot.className = 'status-dot stale';
+  }
+
+  /* Failures table */
+  document.getElementById('failureCount').textContent =
+    failures.length > 0 ? `(${failures.length} recent)` : '';
+  const fb = document.getElementById('failureBody');
+  if (failures.length === 0) {
+    fb.innerHTML = '<tr><td colspan="3" class="empty">No failures — all checks passing ✓</td></tr>';
+  } else {
+    fb.innerHTML = failures.map(f => {
+      const body = f.body || {};
+      const msg = typeof body === 'string' ? body : (body.message || body.error || JSON.stringify(body));
+      return `<tr>
+        <td>${fmtTime(f.time)}</td>
+        <td class="code err">${f.httpCode || '—'}</td>
+        <td class="msg" title="${escapeHtml(msg)}">${escapeHtml(msg)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  /* Recent table */
+  const rb = document.getElementById('recentBody');
+  if (!recent || recent.length === 0) {
+    rb.innerHTML = '<tr><td colspan="4" class="empty">Waiting for first check…</td></tr>';
+  } else {
+    rb.innerHTML = recent.slice().reverse().map(r => {
+      const body = r.body || {};
+      const resp = typeof body === 'string' ? body : JSON.stringify(body).slice(0, 80);
+      return `<tr>
+        <td>${fmtTime(r.time)}</td>
+        <td class="code ${r.status === 'success' ? 'ok' : 'err'}">${r.status}</td>
+        <td class="code ${statusClass(r.httpCode)}">${r.httpCode || '—'}</td>
+        <td class="msg" title="${escapeHtml(resp)}">${escapeHtml(resp)}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Poll loop ── */
+async function poll() {
+  const data = await fetchStats();
+  render(data);
+}
+poll(); // initial
+setInterval(poll, 30_000);
+</script>
+</body>
+</html>

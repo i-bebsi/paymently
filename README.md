@@ -38,8 +38,12 @@ Konfigurasi berada di `src/main/resources/application.yml`. Nilai _default_ dapa
 
 | Env Variable | Default | Keterangan |
 |--------------|---------|------------|
-| `PAYMENT_CLIENT_KEY` | `BCAS` | `X-CLIENT-KEY` header untuk _access token_ request |
+| `PAYMENT_CLIENT_KEY` | _(kosong)_ | `X-CLIENT-KEY` header untuk _access token_ request |
+| `PAYMENT_CHANNEL_ID` | _(kosong)_ | `CHANNEL-ID` header untuk request ke upstream |
+| `PAYMENT_PARTNER_ID` | _(kosong)_ | `X-PARTNER-ID` header untuk request ke upstream |
+| `PAYMENT_EXTERNAL_ID` | _(kosong)_ | `X-EXTERNAL-ID` header untuk semua request |
 | `PAYMENT_SIGNATURE` | _(kosong)_ | `X-SIGNATURE` header untuk semua request ke upstream |
+| `PAYMENT_AUTH_TIMESTAMP` | _(kosong)_ | `X-TIMESTAMP` header — format: `yyyy-MM-ddTHH:mm:ssxxx` |
 
 _Property_ lain di `application.yml`:
 
@@ -127,11 +131,28 @@ Memeriksa kesehatan koneksi ke upstream Payment API.
 GET /api/v1/bill/health
 ```
 
+**Optional Headers** (meng-override nilai default dari `application.yml`):
+
+| Header | Default (dari config) | Meng-override |
+|---|---|---|
+| `X-CLIENT-KEY` | `${PAYMENT_CHANNEL_ID}` | `CHANNEL-ID` + `X-CLIENT-KEY` (token) |
+| `X-TIMESTAMP` | `${PAYMENT_AUTH_TIMESTAMP}` | `X-TIMESTAMP` |
+| `X-EXTERNAL-ID` | `${PAYMENT_EXTERNAL_ID}` | `X-EXTERNAL-ID` |
+
+```bash
+curl --request GET \
+  --url http://localhost:8081/api/v1/bill/health \
+  --header 'X-CLIENT-KEY: KPBW' \
+  --header 'X-TIMESTAMP: 2026-08-01T10:30:00+07:00' \
+  --header 'X-EXTERNAL-ID: KPBW'
+```
+
 **Response Sukses (200):**
 
 ```json
 {
-  "status": "UP"
+  "status": "OK",
+  "time": "2026-08-01T13:55:32Z"
 }
 ```
 
@@ -150,6 +171,94 @@ _Response body bersifat dinamis — dikembalikan apa adanya dari upstream `/v2/b
 ```
 
 Pada permintaan berikutnya, langkah 2–3 dilewati selama token di _cache_ masih berlaku.
+
+## Monitoring & Dashboard
+
+Paymently menyediakan _cron job_ untuk memonitor endpoint healthz secara berkala beserta dashboard HTML untuk melihat hasilnya.
+
+### Menjalankan Cron Job
+
+Cron job berjalan di dalam sesi Claude Code. Minta Claude untuk menjalankannya:
+
+```
+jalankan cron setiap 3 menit untuk curl healthz dengan header X-CLIENT-KEY: KPBW,
+X-TIMESTAMP: 2026-08-01T10:30:00+07:00, X-EXTERNAL-ID: KPBW, log hasilnya ke
+logs/healthz-monitor.log
+```
+
+Atau gunakan _loop mode_:
+
+```
+/loop 3m ./healthz-check.sh
+```
+
+### Menghentikan Cron Job
+
+Cukup minta Claude untuk menghentikan cron:
+
+```
+stop cron healthz
+```
+
+Atau matikan Claude Code session untuk menghentikan semua cron sekaligus.
+
+### Menjalankan Dashboard
+
+```bash
+# Start monitor server (port 9090)
+python3 monitor-server.py &
+
+# Buka di browser
+open http://localhost:9090
+```
+
+Dashboard menampilkan:
+- **Live status dot** — hijau (UP) / merah (DOWN)
+- **Stat tiles** — Total Checks, Success (dengan uptime %), Failure
+- **Last check bar** — HTTP code + pesan error dari response terakhir
+- **Failures table** — 20 kegagalan terakhir: timestamp, HTTP code, pesan
+- **Recent checks** — 10 pengecekan terakhir
+- **Dark mode** — toggle ☀︎/☾, auto-detect OS preference
+- **Auto-refresh** — fetch data setiap 30 detik
+
+### Menghentikan Dashboard
+
+```bash
+# Cari PID proses monitor server
+lsof -ti:9090 | xargs kill
+```
+
+### Menjalankan Health Check Manual
+
+```bash
+# Sekali jalan — hasil di-append ke log
+./healthz-check.sh
+
+# Lihat log
+cat logs/healthz-monitor.log
+
+# Lihat statistik via API
+curl -s http://localhost:9090/api/stats | python3 -m json.tool
+```
+
+### Format Log
+
+Setiap baris di `logs/healthz-monitor.log` adalah JSON:
+
+```json
+{"time":"2026-08-01T13:57:23Z","status":"success","httpCode":200,"body":{"status":"OK"}}
+{"time":"2026-08-01T13:58:00Z","status":"failure","httpCode":504,"body":{"error":"Gateway Timeout","message":"..."}}
+```
+
+### Struktur File Monitoring
+
+```
+├── healthz-check.sh          # Script curl → log JSON line
+├── monitor-server.py         # Python HTTP server (port 9090)
+├── dashboard.html            # Dashboard UI
+└── logs/
+    └── healthz-monitor.log   # Log hasil monitoring (gitignored)
+```
 
 ## Pengujian
 
