@@ -6,3 +6,9 @@ target/
 .idea/
 *.iml
 .DS_Store
+
+# Credentials — file ini berisi kredensial, jangan di-commit
+src/main/resources/application.yml
+
+# Logs — mungkin mengandung token/sensitive data
+logs/

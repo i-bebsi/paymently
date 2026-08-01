@@ -1,0 +1,23 @@
+# Test config — nilai default aman untuk unit/integration test
+# (Overridden sebagian oleh @DynamicPropertySource di PaymentMiddlewareServiceTest)
+payment:
+  api:
+    base-url: http://localhost:8080
+    access-token-path: /v1.0/access-token/b2b/
+    inquiry-path: /v2/bill/inquiry
+    payment-path: /v2/bill/payment
+    healthz-path: /v2/bill/healthz
+    connect-timeout: 2s
+    read-timeout: 20s
+  auth:
+    client-key: test-client-key
+    channel-id: test-channel
+    partner-id: test-partner
+    external-id: test-external
+    signature: test-signature
+    timestamp: 2026-07-14T15:44:00+07:00
+
+logging:
+  level:
+    com.uii.paymently: DEBUG
+    org.apache.http: WARN
