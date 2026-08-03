@@ -15,6 +15,7 @@ Aplikasi Internal
 │  GET  /api/v1/bill/healthz   ← liveness    │
 │  GET  /api/v1/bill/health    ← proxy       │
 │  POST /api/v1/bill/inquiry   ← proxy       │
+│  GET  /api/v1/bill/requests  ← request log │
 └────────────┬────────────────────────────────┘
              │
       ┌──────┴──────┐
@@ -56,6 +57,8 @@ GlobalExceptionHandler → ErrorResponse (DTO)
 - **Bill Inquiry** — Meneruskan permintaan pemeriksaan tagihan ke upstream `/v2/bill/inquiry`.
 - **Health Check** — Dua endpoint: internal liveness (`/healthz`) dan proxy ke upstream (`/health`).
 - **Header Override** — Endpoint `/health` mendukung header custom dari client untuk meng-override nilai default konfigurasi.
+- **Request Logging** — Setiap request dicatat (IP, method, URI, headers, body, response, duration) via `RequestLoggingFilter`, disimpan di in-memory ring buffer (200 entry).
+- **Dashboard Real-time** — Dashboard HTML di `http://localhost:9090` dengan KPI tiles, failures table, request log + pagination + PDF export.
 - **Timeout Handling** — Koneksi _timeout_ upstream dikembalikan sebagai HTTP 504 Gateway Timeout dengan pesan yang jelas.
 - **Structured Logging** — Log dalam format JSON (Logstash) ke konsol dan file (`logs/paymently.json`).
 
@@ -220,8 +223,9 @@ POST /api/v1/bill/inquiry
 Content-Type: application/json
 ```
 
-Memeriksa tagihan pelanggan — meneruskan request ke upstream `/v2/bill/inquiry`. Semua _field_ dikirim apa adanya.
+Memeriksa tagihan pelanggan — meneruskan request ke upstream `/v2/bill/inquiry`. Semua _field_ bersifat opsional (`@JsonInclude(NON_NULL)`) dan dikirim apa adanya.
 
+**Full sample:**
 ```bash
 curl --request POST \
   --url http://localhost:8081/api/v1/bill/inquiry \
@@ -230,14 +234,26 @@ curl --request POST \
     "partnerServiceId": "04602",
     "customerNo": "0226016324",
     "virtualAccountNo": "046020226016324",
+    "trxDateInit": "2026-08-04T10:30:00+07:00",
     "channelCode": 6011,
     "language": "ID",
+    "amount": 500000,
+    "hashedSourceAccountNo": "d52e42f3a8b1c9e7f6d5a4b3c2e1f0a9",
     "sourceBankCode": "008",
-    "inquiryRequestId": "REQ-001",
+    "passApp": "123456",
+    "inquiryRequestId": "INQ-20260804-001",
+    "paymentRequestId": "PAY-20260804-001",
     "additionalInfo": {
       "deviceId": "BSIUII"
     }
   }'
+```
+
+**Minimal:**
+```bash
+curl -X POST http://localhost:8081/api/v1/bill/inquiry \
+  -H 'Content-Type: application/json' \
+  -d '{"customerNo":"0226016324"}'
 ```
 
 **Response Sukses (200):**
@@ -260,6 +276,39 @@ curl --request POST \
   "path": "/api/v1/bill/inquiry"
 }
 ```
+
+### 4. Request Log (`/requests`)
+
+```
+GET /api/v1/bill/requests
+```
+
+Mengembalikan history request yang tercatat oleh `RequestLoggingFilter` (max 200 entry). Digunakan oleh dashboard.
+
+```bash
+curl http://localhost:8081/api/v1/bill/requests | python3 -m json.tool
+```
+
+**Response (200):**
+
+```json
+[
+  {
+    "timestamp": "2026-08-04T10:30:00Z",
+    "clientIp": "127.0.0.1",
+    "method": "GET",
+    "uri": "/api/v1/bill/healthz",
+    "requestHeaders": {"host": "localhost:8081", "user-agent": "curl/8.x"},
+    "requestBody": "",
+    "responseStatus": 200,
+    "responseHeaders": {"Content-Type": "application/json"},
+    "responseBody": "{\"status\":\"UP\",\"service\":\"paymently\"}",
+    "durationMs": 12
+  }
+]
+```
+
+> **Catatan:** Endpoint `/api/v1/bill/requests` sendiri **tidak dicatat** di log untuk menghindari _self-monitoring loop_.
 
 ## Alur Autentikasi
 
@@ -286,13 +335,14 @@ Paymently menyertakan _cron job_ + dashboard HTML untuk memonitor healthz endpoi
 
 ### Dashboard
 
-Dashboard menampilkan statistik health check secara _real-time_ di **http://localhost:9090**:
+Dashboard menampilkan statistik API secara _real-time_ di **http://localhost:9090**. Data berasal dari Request Log (`/api/v1/bill/requests`), mencakup semua traffic API + probe Uptime Kuma.
 
-- **Live status dot** — hijau (UP) / merah (DOWN)
-- **3 stat tiles** — Total Checks, Success (uptime %), Failure
-- **Last check bar** — HTTP code + pesan response terakhir
-- **Failures table** — 20 kegagalan terakhir: timestamp, HTTP code, pesan
-- **Recent checks** — 10 pengecekan terakhir
+- **Live status dot** — hijau (2xx) / merah (non-2xx) berdasarkan request terakhir
+- **3 KPI tiles** — Total Requests, Success (2xx, dengan success rate %), Failure (4xx/5xx)
+- **Last request bar** — Method, path, HTTP code, response body, duration
+- **Failures table** — Request error dengan pagination (10/50/100 per page), klik row untuk expand detail (headers + body lengkap)
+- **Request Log** — Semua request dengan pagination (10/50/100), klik row untuk expand detail
+- **Export PDF** — Tombol ⎙ PDF di header (via browser print → Save as PDF)
 - **Dark mode** — toggle ☀︎/☾, auto-detect OS preference
 - **Auto-refresh** — fetch data setiap 30 detik
 
@@ -303,57 +353,52 @@ python3 monitor-server.py &
 # Buka di browser
 open http://localhost:9090
 
-# API stats & logs
-curl -s http://localhost:9090/api/stats | python3 -m json.tool
-curl -s http://localhost:9090/api/logs  | python3 -m json.tool
-
 # Hentikan server
 lsof -ti:9090 | xargs kill
 ```
 
-### Menjadwalkan Cron Health Check
-
-Minta Claude untuk menjalankan cron:
-
-```
-jalankan cron setiap 3 menit untuk curl healthz ke logs/healthz-monitor.log
-```
-
-Atau _loop mode_:
-
-```
-/loop 3m ./healthz-check.sh
-```
-
-Untuk menghentikan: **"stop cron healthz"**.
-
-### Health Check Manual
+### Menjadwalkan Health Check Manual
 
 ```bash
 # Sekali jalan — hasil di-append ke logs/healthz-monitor.log
 ./healthz-check.sh
-
-# Lihat log
-cat logs/healthz-monitor.log
-```
-
-### Format Log
-
-Setiap baris di `logs/healthz-monitor.log` adalah JSON:
-
-```json
-{"time":"2026-08-01T13:57:23Z","status":"success","httpCode":200,"body":{"status":"OK"}}
-{"time":"2026-08-01T14:00:00Z","status":"failure","httpCode":504,"body":{"error":"Gateway Timeout","message":"..."}}
 ```
 
 ### File Monitoring
 
 ```
-├── healthz-check.sh          # Script curl → log JSON line
-├── monitor-server.py         # Python HTTP server (port 9090)
+├── docker-compose.yml        # Uptime Kuma container
+├── monitor-server.py         # Dashboard server (port 9090)
 ├── dashboard.html            # Dashboard UI
+├── healthz-check.sh          # Script curl → log JSON line
 └── logs/
     └── healthz-monitor.log   # Log hasil monitoring (gitignored)
+```
+
+### Uptime Kuma (External Monitoring)
+
+[Uptime Kuma](https://uptime-kuma.io/) adalah monitoring eksternal yang berjalan di Docker dan secara berkala mengecek endpoint API. Mendukung 90+ notifikasi (Telegram, Discord, Slack, Email, dll).
+
+```bash
+# Start Uptime Kuma (pastikan Docker Desktop berjalan)
+docker compose up -d
+
+# Buka dashboard
+open http://localhost:3001
+```
+
+**Setup awal:** Buka `http://localhost:3001` → buat admin account → tambah monitor:
+
+| Monitor | URL | Interval |
+|---|---|---|
+| Paymently Liveness | `http://host.docker.internal:8081/api/v1/bill/healthz` | 60 detik |
+| Paymently Upstream | `http://host.docker.internal:8081/api/v1/bill/health` | 120 detik |
+
+> **Catatan:** `host.docker.internal` adalah alamat khusus di Docker Desktop macOS agar container bisa mengakses host.
+
+**Hentikan:**
+```bash
+docker compose down
 ```
 
 ## Pengujian
@@ -413,7 +458,7 @@ src/main/java/com/uii/paymently/
 ├── config/
 │   └── RestTemplateConfig.java        # Bean RestTemplate (Apache HttpClient 5)
 ├── controller/
-│   └── BillController.java            # 3 endpoint: healthz, health, inquiry
+│   └── BillController.java            # 4 endpoint: healthz, health, inquiry, requests
 ├── dto/
 │   ├── AccessTokenRequest.java        # OAuth2 request body
 │   ├── AccessTokenResponse.java       # OAuth2 response body
@@ -423,6 +468,9 @@ src/main/java/com/uii/paymently/
 │   └── ErrorResponse.java             # Standard error envelope
 ├── exception/
 │   └── GlobalExceptionHandler.java    # 504 & 500 handler
+├── filter/
+│   ├── RequestLogStore.java           # In-memory ring buffer (200 entry)
+│   └── RequestLoggingFilter.java      # Tangkap request/response detail
 └── service/
     ├── PaymentMiddlewareService.java  # Proxy bill inquiry + health
     └── TokenService.java              # OAuth2 token + in-memory cache
@@ -434,6 +482,7 @@ src/test/
 └── resources/
     └── application.yml                # Test config (nilai dummy)
 
+├── docker-compose.yml                 # Uptime Kuma container
 ├── healthz-check.sh                   # Monitoring: curl script
 ├── monitor-server.py                  # Monitoring: dashboard server
 ├── dashboard.html                     # Monitoring: dashboard UI

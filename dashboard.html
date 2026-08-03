@@ -3,34 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Paymently Healthz Monitor</title>
+<title>Paymently Monitor</title>
 <style>
-  /* ── Palette reference instance ── */
   .viz-root {
     color-scheme: light;
-    /* Surfaces */
     --surface-1:      #fcfcfb;
     --page-plane:     #f9f9f7;
-    /* Ink tokens */
     --text-primary:   #0b0b0b;
     --text-secondary: #52514e;
     --text-muted:     #898781;
-    /* Grid & border */
     --gridline:       #e1e0d9;
     --baseline:       #c3c2b7;
     --border:         rgba(11,11,11,0.10);
-    /* Status palette */
     --status-good:    #0ca30c;
     --status-warning: #fab219;
     --status-serious: #ec835a;
     --status-critical:#d03b3b;
-    /* Sequential blue */
     --seq-400:        #3987e5;
     --seq-500:        #256abf;
-    /* Delta */
     --delta-up:       #006300;
-    /* Surface gap */
-    --gap:            2px;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) .viz-root {
@@ -71,7 +62,6 @@
     --delta-up:       #0ca30c;
   }
 
-  /* ── Global ── */
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -80,12 +70,12 @@
     min-height: 100vh;
   }
   .viz-root {
-    max-width: 960px;
+    max-width: 1040px;
     margin: 0 auto;
     padding: 32px 24px 64px;
   }
 
-  /* ── Header ── */
+  /* Header */
   header {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 24px; padding-bottom: 16px;
@@ -104,14 +94,17 @@
   .status-dot.up    { background: var(--status-good); }
   .status-dot.down  { background: var(--status-critical); }
   .status-dot.stale { background: var(--status-warning); }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(12,163,12,0.3); }
+    50%      { box-shadow: 0 0 0 6px rgba(12,163,12,0); }
+  }
+  .status-dot.up { animation: pulse 3s ease-in-out infinite; }
 
   .header-right {
     display: flex; align-items: center; gap: 12px;
     font-size: 13px; color: var(--text-secondary);
   }
-  .header-right .refresh {
-    font-variant-numeric: tabular-nums;
-  }
+  .header-right span { font-variant-numeric: tabular-nums; }
   .theme-btn {
     background: none; border: 1px solid var(--border);
     color: var(--text-secondary); padding: 4px 8px;
@@ -119,12 +112,12 @@
   }
   .theme-btn:hover { background: var(--gridline); }
 
-  /* ── KPI Row (stat tiles) ── */
+  /* KPI Row */
   .kpi-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
-    margin-bottom: 28px;
+    margin-bottom: 20px;
   }
   .stat-tile {
     background: var(--surface-1);
@@ -132,7 +125,6 @@
     border-radius: 8px;
     padding: 20px 24px;
     display: flex; flex-direction: column; gap: 4px;
-    position: relative;
   }
   .stat-tile .label {
     font-size: 12px; font-weight: 500;
@@ -150,8 +142,8 @@
     font-size: 12px; color: var(--text-secondary);
   }
 
-  /* ── Last check status bar ── */
-  .last-check {
+  /* Last request bar */
+  .last-bar {
     background: var(--surface-1);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -160,23 +152,20 @@
     display: flex; align-items: center; gap: 12px;
     font-size: 14px;
   }
-  .last-check .http-code {
+  .last-bar .http-code {
     font-weight: 600; font-variant-numeric: tabular-nums;
-    padding: 2px 8px; border-radius: 4px;
-    font-size: 13px;
+    padding: 2px 8px; border-radius: 4px; font-size: 13px;
   }
   .http-code.code-2xx { background: var(--status-good); color: #fff; }
   .http-code.code-4xx, .http-code.code-5xx { background: var(--status-critical); color: #fff; }
 
-  /* ── Tables ── */
+  /* Tables */
   .section-title {
     font-size: 13px; font-weight: 600;
     color: var(--text-muted);
     text-transform: uppercase; letter-spacing: 0.5px;
     margin-bottom: 8px; margin-top: 24px;
   }
-  .section-title:first-of-type { margin-top: 0; }
-
   table {
     width: 100%; border-collapse: separate; border-spacing: 0;
     background: var(--surface-1);
@@ -199,30 +188,77 @@
   }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: var(--gridline); }
-  td.code {
-    font-weight: 600;
-  }
+  td.code { font-weight: 600; }
   td.code.ok  { color: var(--status-good); }
   td.code.err { color: var(--status-critical); }
   td.msg {
-    max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: var(--text-secondary);
   }
+  td.method { font-weight: 600; }
+  td.method.GET  { color: var(--status-good); }
+  td.method.POST { color: var(--seq-400); }
+  td.ip { color: var(--text-muted); font-size: 12px; }
 
-  /* ── Empty state ── */
+  /* Expandable detail */
+  .req-row { cursor: pointer; }
+  .req-detail {
+    display: none; padding: 12px 16px; background: var(--page-plane);
+    border-bottom: 1px solid var(--gridline); font-size: 12px;
+  }
+  .req-detail.open { display: table-row; }
+  .req-detail pre {
+    margin: 4px 0 8px; white-space: pre-wrap; word-break: break-all;
+    color: var(--text-secondary); max-height: 200px; overflow-y: auto;
+    font-family: ui-monospace, "SF Mono", monospace; font-size: 11px;
+  }
+  .req-detail .dlabel { font-weight: 600; color: var(--text-primary); }
+
   .empty {
     text-align: center; color: var(--text-muted);
     padding: 40px 20px; font-size: 14px;
   }
 
-  /* ── Pulse animation for live dot ── */
-  @keyframes pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(12,163,12,0.3); }
-    50%      { box-shadow: 0 0 0 6px rgba(12,163,12,0); }
+  /* Pagination */
+  .pagination {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px; font-size: 12px; color: var(--text-secondary);
   }
-  .status-dot.up { animation: pulse 3s ease-in-out infinite; }
+  .pagination select {
+    background: var(--surface-1); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 8px; font-size: 12px;
+  }
+  .pagination button {
+    background: var(--surface-1); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 10px; cursor: pointer; font-size: 12px;
+    margin-left: 4px;
+  }
+  .pagination button:disabled { opacity: 0.4; cursor: default; }
+  .pagination button:hover:not(:disabled) { background: var(--gridline); }
 
-  /* ── Responsive ── */
+  /* Export button */
+  .export-btn {
+    background: none; border: 1px solid var(--border);
+    color: var(--text-secondary); padding: 4px 10px;
+    border-radius: 4px; cursor: pointer; font-size: 12px;
+    margin-left: 8px;
+  }
+  .export-btn:hover { background: var(--gridline); }
+
+  /* Print styles */
+  @media print {
+    body { background: #fff; color: #000; }
+    .viz-root { max-width: 100%; padding: 0; }
+    header, .kpi-row, .last-bar, .pagination, .section-title, .theme-btn, .export-btn { }
+    .req-detail { display: table-row !important; }
+    .req-row { cursor: default; }
+    table { border: 1px solid #ccc; break-inside: avoid; }
+    thead th { background: #eee; color: #000; }
+    .status-dot, .empty { }
+  }
+
   @media (max-width: 640px) {
     .kpi-row { grid-template-columns: 1fr; }
     .viz-root { padding: 16px 12px 48px; }
@@ -232,69 +268,108 @@
 <body>
 <div class="viz-root" data-theme="light">
 
-  <!-- Header -->
   <header>
     <h1>
       <span class="status-dot" id="liveDot"></span>
-      Paymently Healthz
+      Paymently
     </h1>
     <div class="header-right">
-      Last check: <span class="refresh" id="lastCheckTime">—</span>
+      Last request: <span id="lastTime">—</span>
+      <button class="export-btn" onclick="window.print()" title="Export to PDF">⎙ PDF</button>
       <button class="theme-btn" id="themeToggle" title="Toggle dark mode">☀︎ / ☾</button>
     </div>
   </header>
 
-  <!-- KPI Row -->
   <div class="kpi-row">
     <div class="stat-tile" id="tileTotal">
-      <span class="label">Total Checks</span>
+      <span class="label">Total Requests</span>
       <span class="value">—</span>
     </div>
     <div class="stat-tile success" id="tileSuccess">
-      <span class="label">Success</span>
+      <span class="label">Success (2xx)</span>
       <span class="value">—</span>
       <span class="sub" id="subSuccess"></span>
     </div>
     <div class="stat-tile failure" id="tileFailure">
-      <span class="label">Failure</span>
+      <span class="label">Failure (4xx/5xx)</span>
       <span class="value">—</span>
       <span class="sub" id="subFailure"></span>
     </div>
   </div>
 
-  <!-- Last check status -->
-  <div class="last-check" id="lastCheckBar" style="display:none">
-    Last response:
+  <div class="last-bar" id="lastBar" style="display:none">
+    Last request: <strong id="lastMethod" style="margin-right:4px"></strong>
+    <span id="lastPath" style="margin-right:8px;color:var(--text-secondary)"></span>
     <span class="http-code" id="lastHttpCode"></span>
-    <span id="lastMsg"></span>
+    <span id="lastMsg" style="flex:1"></span>
+    <span style="color:var(--text-muted);font-size:12px" id="lastDuration"></span>
   </div>
 
-  <!-- Failures table -->
   <div class="section-title">Failures <span style="font-weight:400;font-size:12px" id="failureCount"></span></div>
+  <div class="pagination" id="failPagination">
+    <span>
+      Show
+      <select id="failPageSize" onchange="changeFailPageSize()">
+        <option value="10" selected>10</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+      per page
+    </span>
+    <span>
+      <button id="failBtnFirst" onclick="goFailPage(1)">««</button>
+      <button id="failBtnPrev" onclick="goFailPage(failCurrentPage-1)">«</button>
+      <span id="failPageInfo">Page 1 of 1</span>
+      <button id="failBtnNext" onclick="goFailPage(failCurrentPage+1)">»</button>
+      <button id="failBtnLast" onclick="goFailPage(failTotalPages)">»»</button>
+    </span>
+  </div>
   <table id="failureTable">
-    <thead>
-      <tr><th>Time</th><th>HTTP</th><th>Message</th></tr>
-    </thead>
+    <thead><tr><th>Time</th><th>IP</th><th>Method</th><th>Path</th><th>Status</th><th>Response</th></tr></thead>
     <tbody id="failureBody">
-      <tr><td colspan="3" class="empty">No failures — all checks passing ✓</td></tr>
+      <tr><td colspan="6" class="empty">No errors — all requests passing ✓</td></tr>
     </tbody>
   </table>
 
-  <!-- Recent checks table -->
-  <div class="section-title">Recent Checks</div>
-  <table id="recentTable">
-    <thead>
-      <tr><th>Time</th><th>Status</th><th>HTTP</th><th>Response</th></tr>
-    </thead>
-    <tbody id="recentBody">
-      <tr><td colspan="4" class="empty">Waiting for first check…</td></tr>
+  <div class="section-title">Request Log <span style="font-weight:400;font-size:12px" id="reqCount"></span></div>
+  <div class="pagination" id="pagination">
+    <span>
+      Show
+      <select id="pageSize" onchange="changePageSize()">
+        <option value="10" selected>10</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+      per page
+    </span>
+    <span>
+      <button id="btnFirst" onclick="goPage(1)">««</button>
+      <button id="btnPrev" onclick="goPage(currentPage-1)">«</button>
+      <span id="pageInfo">Page 1 of 1</span>
+      <button id="btnNext" onclick="goPage(currentPage+1)">»</button>
+      <button id="btnLast" onclick="goPage(totalPages)">»»</button>
+    </span>
+  </div>
+  <table id="requestTable">
+    <thead><tr><th>Time</th><th>IP</th><th>Method</th><th>Path</th><th>Status</th><th>Duration</th><th>Response</th></tr></thead>
+    <tbody id="requestBody">
+      <tr><td colspan="7" class="empty">Waiting for requests…</td></tr>
     </tbody>
   </table>
 
 </div>
 
 <script>
-/* ── Theme toggle ── */
+let allEntries = [];
+let currentPage = 1;
+let pageSize = 10;
+let totalPages = 1;
+
+let allFailures = [];
+let failCurrentPage = 1;
+let failPageSize = 10;
+let failTotalPages = 1;
+
 const root = document.querySelector('.viz-root');
 const btn = document.getElementById('themeToggle');
 let theme = localStorage.getItem('paymently-theme') || 'light';
@@ -306,96 +381,10 @@ function applyTheme(t) {
 applyTheme(theme);
 btn.addEventListener('click', () => applyTheme(theme === 'light' ? 'dark' : 'light'));
 
-/* ── Data fetch ── */
-async function fetchStats() {
-  try {
-    const res = await fetch('/api/stats');
-    if (!res.ok) throw new Error('API error');
-    return await res.json();
-  } catch (e) { return null; }
-}
-
 function fmtTime(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
-  return d.toLocaleString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit',
-    day:'numeric', month:'short' });
-}
-
-function statusClass(code) {
-  if (code >= 200 && code < 300) return 'ok';
-  return 'err';
-}
-
-function render(data) {
-  if (!data) return;
-
-  const { total, success, failure, lastCheck, failures, recent } = data;
-
-  /* Stat tiles */
-  document.querySelector('#tileTotal .value').textContent = total || 0;
-  document.querySelector('#tileSuccess .value').textContent = success || 0;
-  document.querySelector('#tileFailure .value').textContent = failure || 0;
-  const rate = total > 0 ? Math.round((success / total) * 100) : 0;
-  document.getElementById('subSuccess').textContent = total > 0 ? `${rate}% uptime` : '';
-  document.getElementById('subFailure').textContent = failure > 0 ? `${failure} error(s)` : '';
-
-  /* Last check */
-  document.getElementById('lastCheckTime').textContent = lastCheck ? fmtTime(lastCheck.time) : '—';
-  const bar = document.getElementById('lastCheckBar');
-  const codeEl = document.getElementById('lastHttpCode');
-  const msgEl = document.getElementById('lastMsg');
-  const dot = document.getElementById('liveDot');
-  if (lastCheck) {
-    bar.style.display = 'flex';
-    const code = lastCheck.httpCode || 0;
-    codeEl.textContent = code;
-    codeEl.className = 'http-code ' + (code >= 200 && code < 300 ? 'code-2xx' : 'code-5xx');
-    const body = lastCheck.body || {};
-    msgEl.textContent = typeof body === 'string' ? body : (body.message || body.error || JSON.stringify(body).slice(0, 120));
-
-    /* Live dot */
-    dot.className = 'status-dot';
-    if (lastCheck.status === 'success') dot.classList.add('up');
-    else dot.classList.add('down');
-  } else {
-    dot.className = 'status-dot stale';
-  }
-
-  /* Failures table */
-  document.getElementById('failureCount').textContent =
-    failures.length > 0 ? `(${failures.length} recent)` : '';
-  const fb = document.getElementById('failureBody');
-  if (failures.length === 0) {
-    fb.innerHTML = '<tr><td colspan="3" class="empty">No failures — all checks passing ✓</td></tr>';
-  } else {
-    fb.innerHTML = failures.map(f => {
-      const body = f.body || {};
-      const msg = typeof body === 'string' ? body : (body.message || body.error || JSON.stringify(body));
-      return `<tr>
-        <td>${fmtTime(f.time)}</td>
-        <td class="code err">${f.httpCode || '—'}</td>
-        <td class="msg" title="${escapeHtml(msg)}">${escapeHtml(msg)}</td>
-      </tr>`;
-    }).join('');
-  }
-
-  /* Recent table */
-  const rb = document.getElementById('recentBody');
-  if (!recent || recent.length === 0) {
-    rb.innerHTML = '<tr><td colspan="4" class="empty">Waiting for first check…</td></tr>';
-  } else {
-    rb.innerHTML = recent.slice().reverse().map(r => {
-      const body = r.body || {};
-      const resp = typeof body === 'string' ? body : JSON.stringify(body).slice(0, 80);
-      return `<tr>
-        <td>${fmtTime(r.time)}</td>
-        <td class="code ${r.status === 'success' ? 'ok' : 'err'}">${r.status}</td>
-        <td class="code ${statusClass(r.httpCode)}">${r.httpCode || '—'}</td>
-        <td class="msg" title="${escapeHtml(resp)}">${escapeHtml(resp)}</td>
-      </tr>`;
-    }).join('');
-  }
+  return d.toLocaleString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit', day:'numeric', month:'short' });
 }
 
 function escapeHtml(s) {
@@ -403,12 +392,201 @@ function escapeHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-/* ── Poll loop ── */
-async function poll() {
-  const data = await fetchStats();
-  render(data);
+function is2xx(code) { return code >= 200 && code < 300; }
+
+function toggleDetail(id) {
+  document.getElementById(id).classList.toggle('open');
 }
-poll(); // initial
+
+async function fetchRequests() {
+  try {
+    const res = await fetch('/api/requests');
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    return [];
+  } catch (e) { return []; }
+}
+
+function goPage(p) {
+  if (p < 1 || p > totalPages) return;
+  currentPage = p;
+  renderRequestTable();
+  updatePagination();
+}
+
+function changePageSize() {
+  pageSize = parseInt(document.getElementById('pageSize').value);
+  currentPage = 1;
+  renderRequestTable();
+  updatePagination();
+}
+
+/* ── Failure pagination ── */
+function goFailPage(p) {
+  if (p < 1 || p > failTotalPages) return;
+  failCurrentPage = p;
+  renderFailTable();
+  updateFailPagination();
+}
+
+function changeFailPageSize() {
+  failPageSize = parseInt(document.getElementById('failPageSize').value);
+  failCurrentPage = 1;
+  renderFailTable();
+  updateFailPagination();
+}
+
+function updateFailPagination() {
+  failTotalPages = Math.max(1, Math.ceil(allFailures.length / failPageSize));
+  document.getElementById('failPageInfo').textContent = `Page ${failCurrentPage} of ${failTotalPages}`;
+  document.getElementById('failBtnFirst').disabled = failCurrentPage <= 1;
+  document.getElementById('failBtnPrev').disabled = failCurrentPage <= 1;
+  document.getElementById('failBtnNext').disabled = failCurrentPage >= failTotalPages;
+  document.getElementById('failBtnLast').disabled = failCurrentPage >= failTotalPages;
+}
+
+function renderFailTable() {
+  const start = (failCurrentPage - 1) * failPageSize;
+  const page = allFailures.slice(start, start + failPageSize);
+  const fb = document.getElementById('failureBody');
+
+  if (page.length === 0) {
+    fb.innerHTML = '<tr><td colspan="6" class="empty">No errors on this page</td></tr>';
+    return;
+  }
+  fb.innerHTML = '';
+  page.forEach(r => {
+    const failIdx = allEntries.indexOf(r);
+    const detailId = `fail-detail-${failIdx}`;
+    const resp = (r.responseBody || '').slice(0, 100);
+    fb.innerHTML += `<tr class="req-row" onclick="toggleDetail('${detailId}')">
+      <td>${fmtTime(r.timestamp)}</td>
+      <td class="ip">${escapeHtml(r.clientIp)}</td>
+      <td class="method ${r.method}">${escapeHtml(r.method)}</td>
+      <td>${escapeHtml(r.uri)}</td>
+      <td class="code err">${r.responseStatus}</td>
+      <td class="msg" title="${escapeHtml(resp)}">${escapeHtml(resp)}</td>
+    </tr>
+    <tr class="req-detail" id="${detailId}">
+      <td colspan="6">
+        <span class="dlabel">Request Headers:</span>
+        <pre>${escapeHtml(JSON.stringify(r.requestHeaders, null, 2))}</pre>
+        <span class="dlabel">Request Body:</span>
+        <pre>${escapeHtml(r.requestBody || '(empty)')}</pre>
+        <span class="dlabel">Response Headers:</span>
+        <pre>${escapeHtml(JSON.stringify(r.responseHeaders, null, 2))}</pre>
+        <span class="dlabel">Response Body:</span>
+        <pre>${escapeHtml(r.responseBody || '(empty)')}</pre>
+      </td>
+    </tr>`;
+  });
+}
+
+function updatePagination() {
+  totalPages = Math.max(1, Math.ceil(allEntries.length / pageSize));
+  document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+  document.getElementById('btnFirst').disabled = currentPage <= 1;
+  document.getElementById('btnPrev').disabled = currentPage <= 1;
+  document.getElementById('btnNext').disabled = currentPage >= totalPages;
+  document.getElementById('btnLast').disabled = currentPage >= totalPages;
+}
+
+function renderRequestTable() {
+  const start = (currentPage - 1) * pageSize;
+  const page = allEntries.slice(start, start + pageSize);
+  const rb = document.getElementById('requestBody');
+
+  if (page.length === 0) {
+    rb.innerHTML = '<tr><td colspan="7" class="empty">No requests on this page</td></tr>';
+    return;
+  }
+  rb.innerHTML = '';
+  page.forEach((r, i) => {
+    const globalIdx = start + i;
+    const detailId = `req-detail-${globalIdx}`;
+    const cls = is2xx(r.responseStatus) ? 'ok' : 'err';
+    const resp = (r.responseBody || '').slice(0, 80);
+    rb.innerHTML += `<tr class="req-row" onclick="toggleDetail('${detailId}')">
+      <td>${fmtTime(r.timestamp)}</td>
+      <td class="ip">${escapeHtml(r.clientIp)}</td>
+      <td class="method ${r.method}">${escapeHtml(r.method)}</td>
+      <td>${escapeHtml(r.uri)}</td>
+      <td class="code ${cls}">${r.responseStatus}</td>
+      <td>${r.durationMs}ms</td>
+      <td class="msg" title="${escapeHtml(resp)}">${escapeHtml(resp)}</td>
+    </tr>
+    <tr class="req-detail" id="${detailId}">
+      <td colspan="7">
+        <span class="dlabel">Request Headers:</span>
+        <pre>${escapeHtml(JSON.stringify(r.requestHeaders, null, 2))}</pre>
+        <span class="dlabel">Request Body:</span>
+        <pre>${escapeHtml(r.requestBody || '(empty)')}</pre>
+        <span class="dlabel">Response Headers:</span>
+        <pre>${escapeHtml(JSON.stringify(r.responseHeaders, null, 2))}</pre>
+        <span class="dlabel">Response Body:</span>
+        <pre>${escapeHtml(r.responseBody || '(empty)')}</pre>
+      </td>
+    </tr>`;
+  });
+}
+
+function renderAll(entries) {
+  allEntries = Array.isArray(entries) ? entries : [];
+  const total = allEntries.length;
+  const success = allEntries.filter(r => is2xx(r.responseStatus)).length;
+  const failure = total - success;
+  const last = allEntries.length > 0 ? allEntries[0] : null;
+  const failures = allEntries.filter(r => !is2xx(r.responseStatus));
+
+  /* KPI tiles */
+  document.querySelector('#tileTotal .value').textContent = total || '—';
+  document.querySelector('#tileSuccess .value').textContent = success;
+  document.querySelector('#tileFailure .value').textContent = failure;
+  const rate = total > 0 ? Math.round((success / total) * 100) : 0;
+  document.getElementById('subSuccess').textContent = total > 0 ? `${rate}% success rate` : '';
+  document.getElementById('subFailure').textContent = failure > 0 ? `${failure} error(s)` : '';
+
+  /* Live dot + last bar */
+  const dot = document.getElementById('liveDot');
+  const bar = document.getElementById('lastBar');
+  document.getElementById('lastTime').textContent = last ? fmtTime(last.timestamp) : '—';
+  if (last) {
+    bar.style.display = 'flex';
+    document.getElementById('lastMethod').textContent = last.method;
+    document.getElementById('lastPath').textContent = last.uri;
+    const codeEl = document.getElementById('lastHttpCode');
+    codeEl.textContent = last.responseStatus;
+    codeEl.className = 'http-code ' + (is2xx(last.responseStatus) ? 'code-2xx' : 'code-5xx');
+    const respBody = typeof last.responseBody === 'string' ? last.responseBody : JSON.stringify(last.responseBody || {});
+    document.getElementById('lastMsg').textContent = respBody.slice(0, 100);
+    document.getElementById('lastDuration').textContent = last.durationMs + 'ms';
+    dot.className = 'status-dot ' + (is2xx(last.responseStatus) ? 'up' : 'down');
+  } else {
+    bar.style.display = 'none';
+    dot.className = 'status-dot stale';
+  }
+
+  /* Failures table + pagination */
+  allFailures = failures;
+  document.getElementById('failureCount').textContent = failures.length > 0 ? `(${failures.length})` : '';
+  failCurrentPage = 1;
+  renderFailTable();
+  updateFailPagination();
+
+  /* Request Log + pagination */
+  document.getElementById('reqCount').textContent = total > 0 ? `(${total})` : '';
+  currentPage = 1;
+  renderRequestTable();
+  updatePagination();
+}
+
+async function poll() {
+  const requests = await fetchRequests();
+  renderAll(requests);
+}
+poll();
 setInterval(poll, 30_000);
 </script>
 </body>

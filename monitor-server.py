@@ -6,6 +6,7 @@ Dashboard: http://localhost:9090
 
 import json
 import os
+import urllib.request
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
@@ -20,6 +21,8 @@ class MonitorHandler(SimpleHTTPRequestHandler):
             self._serve_json(self._read_logs())
         elif self.path == "/api/stats":
             self._serve_json(self._compute_stats())
+        elif self.path == "/api/requests":
+            self._serve_json(self._proxy_requests())
         elif self.path == "/" or self.path == "/dashboard":
             self._serve_html()
         else:
@@ -75,6 +78,15 @@ class MonitorHandler(SimpleHTTPRequestHandler):
             "failures": failures[-20:],  # 20 terakhir
             "recent": logs[-10:],        # 10 terakhir (all)
         }
+
+    def _proxy_requests(self):
+        """Proxy request log dari Paymently API."""
+        try:
+            req = urllib.request.Request("http://localhost:8081/api/v1/bill/requests")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            return {"error": f"Gagal mengambil request log: {e}", "data": []}
 
     def log_message(self, format, *args):
         pass  # silent HTTP logs

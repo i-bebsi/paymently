@@ -2,6 +2,7 @@ package com.uii.paymently.controller;
 
 import com.uii.paymently.dto.BillInquiryRequest;
 import com.uii.paymently.dto.BillInquiryResponse;
+import com.uii.paymently.filter.RequestLogStore;
 import com.uii.paymently.service.PaymentMiddlewareService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -22,6 +24,7 @@ public class BillController {
     private static final Logger HEALTHZ_LOGGER = LoggerFactory.getLogger("payment.healthz");
 
     private final PaymentMiddlewareService middlewareService;
+    private final RequestLogStore requestLogStore;
 
     @GetMapping("/healthz")
     public ResponseEntity<Map<String, String>> healthz(HttpServletRequest request) {
@@ -55,5 +58,10 @@ public class BillController {
                 clientKey, timestamp, externalId);
         Map<String, Object> response = middlewareService.healthz(clientKey, timestamp, externalId);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/requests")
+    public ResponseEntity<List<RequestLogStore.RequestLogEntry>> requestLog() {
+        return ResponseEntity.ok(requestLogStore.getAll());
     }
 }

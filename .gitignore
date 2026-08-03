@@ -12,3 +12,6 @@ src/main/resources/application.yml
 
 # Logs — mungkin mengandung token/sensitive data
 logs/
+
+# Uptime Kuma — data monitoring (SQLite)
+uptime-kuma-data/
