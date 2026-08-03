@@ -4,25 +4,60 @@
 
 Paymently adalah _middleware_ Spring Boot yang menjembatani aplikasi internal UII dengan Payment API Gateway eksternal (`payment.uii.ac.id`). Layanan ini menangani autentikasi OAuth2 secara otomatis, meneruskan (_proxy_) permintaan _bill inquiry_ dan _health check_, serta memberikan penanganan _error_ yang terstruktur.
 
+## Arsitektur
+
+```
+Aplikasi Internal
+      │
+      ▼
+┌─────────────────────────────────────────────┐
+│  BillController  (port 8081)                │
+│  GET  /api/v1/bill/healthz   ← liveness    │
+│  GET  /api/v1/bill/health    ← proxy       │
+│  POST /api/v1/bill/inquiry   ← proxy       │
+└────────────┬────────────────────────────────┘
+             │
+      ┌──────┴──────┐
+      ▼              ▼
+┌───────────┐  ┌──────────────────┐
+│TokenService│  │PaymentMiddleware │
+│ (OAuth2)   │  │Service (proxy)   │
+│ cache      │  │                  │
+└─────┬─────┘  └────────┬─────────┘
+      │                 │
+      ▼                 ▼
+┌─────────────────────────────────┐
+│     RestTemplate                │
+│  (Apache HttpClient 5, pool)    │
+└───────────────┬─────────────────┘
+                │
+                ▼
+     payment.uii.ac.id
+     ├── /v1.0/access-token/b2b/   (OAuth2 token)
+     ├── /v2/bill/inquiry           (bill inquiry)
+     └── /v2/bill/healthz           (health check)
+```
+
+### Dependency Graph
+
+```
+BillController
+  └── PaymentMiddlewareService
+        ├── RestTemplate (paymentRestTemplate)
+        └── TokenService
+              └── RestTemplate (same bean)
+
+GlobalExceptionHandler → ErrorResponse (DTO)
+```
+
 ## Fitur
 
 - **OAuth2 Client Credentials** — Mengambil _access token_ secara dinamis dari `/v1.0/access-token/b2b` dan menyimpannya di _cache_ hingga mendekati masa kedaluwarsa.
 - **Bill Inquiry** — Meneruskan permintaan pemeriksaan tagihan ke upstream `/v2/bill/inquiry`.
-- **Health Check** — Meneruskan pengecekan kesehatan layanan ke upstream `/v2/bill/healthz`.
+- **Health Check** — Dua endpoint: internal liveness (`/healthz`) dan proxy ke upstream (`/health`).
+- **Header Override** — Endpoint `/health` mendukung header custom dari client untuk meng-override nilai default konfigurasi.
 - **Timeout Handling** — Koneksi _timeout_ upstream dikembalikan sebagai HTTP 504 Gateway Timeout dengan pesan yang jelas.
 - **Structured Logging** — Log dalam format JSON (Logstash) ke konsol dan file (`logs/paymently.json`).
-
-## Teknologi
-
-| Teknologi | Keterangan |
-|-----------|------------|
-| Java 21 | Runtime |
-| Spring Boot 3.4.1 | Framework |
-| Apache HttpClient 5 | HTTP client dengan _connection pooling_ |
-| WireMock 3.9 | _HTTP stub_ untuk pengujian integrasi |
-| Logstash Logback | _Structured JSON logging_ |
-| Lombok | _Boilerplate_ reduction |
-| Maven | Build tool |
 
 ## Prasyarat
 
@@ -34,25 +69,56 @@ Paymently adalah _middleware_ Spring Boot yang menjembatani aplikasi internal UI
 
 ## Konfigurasi
 
-Konfigurasi berada di `src/main/resources/application.yml`. Nilai _default_ dapat di-_override_ melalui _environment variable_:
+Konfigurasi dilakukan melalui `application.yml` di `src/main/resources/`. Semua property menggunakan `@Value` dan dapat di-_override_ via _environment variable_ (Spring Boot relaxed binding — titik jadi underscore uppercase, misal `payment.api.base-url` → `PAYMENT_API_BASE_URL`).
 
-| Env Variable | Default | Keterangan |
-|--------------|---------|------------|
-| `PAYMENT_CLIENT_KEY` | _(kosong)_ | `X-CLIENT-KEY` header untuk _access token_ request |
-| `PAYMENT_CHANNEL_ID` | _(kosong)_ | `CHANNEL-ID` header untuk request ke upstream |
-| `PAYMENT_PARTNER_ID` | _(kosong)_ | `X-PARTNER-ID` header untuk request ke upstream |
-| `PAYMENT_EXTERNAL_ID` | _(kosong)_ | `X-EXTERNAL-ID` header untuk semua request |
-| `PAYMENT_SIGNATURE` | _(kosong)_ | `X-SIGNATURE` header untuk semua request ke upstream |
-| `PAYMENT_AUTH_TIMESTAMP` | _(kosong)_ | `X-TIMESTAMP` header — format: `yyyy-MM-ddTHH:mm:ssxxx` |
+### `payment.api.*` — Upstream API
 
-_Property_ lain di `application.yml`:
+| Property | Env Variable | Default | Deskripsi |
+|---|---|---|---|
+| `payment.api.base-url` | `PAYMENT_API_BASE_URL` | — | Base URL upstream API |
+| `payment.api.access-token-path` | `PAYMENT_API_ACCESS_TOKEN_PATH` | — | Path endpoint OAuth2 token |
+| `payment.api.inquiry-path` | `PAYMENT_API_INQUIRY_PATH` | — | Path endpoint bill inquiry |
+| `payment.api.healthz-path` | `PAYMENT_API_HEALTHZ_PATH` | `/v2/bill/healthz` | Path endpoint health check |
+| `payment.api.connect-timeout` | `PAYMENT_API_CONNECT_TIMEOUT` | `10s` | Timeout koneksi TCP |
+| `payment.api.read-timeout` | `PAYMENT_API_READ_TIMEOUT` | `20s` | Timeout baca response |
+
+### `payment.auth.*` — Auth headers
+
+| Property | Env Variable | Default | Deskripsi |
+|---|---|---|---|
+| `payment.auth.client-key` | `PAYMENT_CLIENT_KEY` | — | `X-CLIENT-KEY` header (token request) |
+| `payment.auth.channel-id` | `PAYMENT_CHANNEL_ID` | — | `CHANNEL-ID` header (bill request) |
+| `payment.auth.partner-id` | `PAYMENT_PARTNER_ID` | — | `X-PARTNER-ID` header |
+| `payment.auth.external-id` | `PAYMENT_EXTERNAL_ID` | — | `X-EXTERNAL-ID` header |
+| `payment.auth.signature` | `PAYMENT_SIGNATURE` | — | `X-SIGNATURE` header |
+| `payment.auth.timestamp` | `PAYMENT_AUTH_TIMESTAMP` | — | `X-TIMESTAMP` header (format: `yyyy-MM-ddTHH:mm:ssxxx`) |
+
+### Contoh `application.yml`
 
 ```yaml
+server:
+  port: 8081
+
 payment:
   api:
     base-url: https://payment.uii.ac.id
-    connect-timeout: 10s     # timeout koneksi TCP
-    read-timeout: 20s        # timeout baca response
+    access-token-path: /v1.0/access-token/b2b/
+    inquiry-path: /v2/bill/inquiry
+    healthz-path: /v2/bill/healthz
+    connect-timeout: 10s
+    read-timeout: 20s
+  auth:
+    client-key: ${PAYMENT_CLIENT_KEY}
+    channel-id: ${PAYMENT_CHANNEL_ID}
+    partner-id: ${PAYMENT_PARTNER_ID}
+    external-id: ${PAYMENT_EXTERNAL_ID}
+    signature: ${PAYMENT_SIGNATURE}
+    timestamp: ${PAYMENT_AUTH_TIMESTAMP}
+
+logging:
+  level:
+    com.uii.paymently: DEBUG
+    org.apache.http: INFO
 ```
 
 ## Menjalankan Aplikasi
@@ -61,90 +127,69 @@ payment:
 # Pastikan JAVA_HOME ke JDK 21
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21
 
+# Set kredensial (ganti dengan nilai sebenarnya)
+export PAYMENT_CLIENT_KEY="..."
+export PAYMENT_CHANNEL_ID="..."
+export PAYMENT_PARTNER_ID="..."
+export PAYMENT_EXTERNAL_ID="..."
+export PAYMENT_SIGNATURE="..."
+export PAYMENT_AUTH_TIMESTAMP="2026-07-14T15:44:00+07:00"
+
 # Jalankan
 mvn spring-boot:run
 ```
 
-Aplikasi berjalan di `http://localhost:8081`.
+Aplikasi berjalan di **`http://localhost:8081`**.
 
-## Endpoint API
+## API Endpoints
 
-### 1. Bill Inquiry
-
-Memeriksa tagihan pelanggan.
+### 1. Internal Liveness (`/healthz`)
 
 ```
-POST /api/v1/bill/inquiry
-Content-Type: application/json
+GET /api/v1/bill/healthz
 ```
 
-**Request Body:**
+Cek kesehatan internal — **tidak memanggil upstream API**. Tidak memerlukan auth atau header apapun.
+
+```bash
+curl --request GET --url http://localhost:8081/api/v1/bill/healthz
+```
+
+**Response (200):**
 
 ```json
 {
-  "partnerServiceId": "04602",
-  "customerNo": "0226016324",
-  "virtualAccountNo": "046020226016324",
-  "trxDateInit": "2026-07-14T15:44:00+07:00",
-  "channelCode": 6011,
-  "language": "ID",
-  "amount": 500000,
-  "hashedSourceAccountNo": "...",
-  "sourceBankCode": "008",
-  "passApp": "...",
-  "inquiryRequestId": "REQ-001",
-  "paymentRequestId": "PAY-001",
-  "additionalInfo": {
-    "deviceId": "BSIUII"
-  }
+  "status": "UP",
+  "service": "paymently"
 }
 ```
 
-Semua _field_ bersifat opsional (_nullable_) dan akan dikirim apa adanya ke upstream.
-
-**Response Sukses (200):**
-
-```json
-{
-  "responseCode": "00",
-  "responseMessage": "Success"
-}
-```
-
-**Response Timeout (504 Gateway Timeout):**
-
-```json
-{
-  "timestamp": "2026-08-01 10:30:00",
-  "status": 504,
-  "error": "Gateway Timeout",
-  "message": "I/O error on POST request for \"...\": Read timed out",
-  "path": "/api/v1/bill/inquiry"
-}
-```
-
-### 2. Health Check
-
-Memeriksa kesehatan koneksi ke upstream Payment API.
+### 2. Upstream Health Check (`/health`)
 
 ```
 GET /api/v1/bill/health
 ```
 
-**Optional Headers** (meng-override nilai default dari `application.yml`):
+Meneruskan health check ke upstream `/v2/bill/healthz`. Mendukung **header opsional** untuk meng-override nilai dari konfigurasi:
 
-| Header | Default (dari config) | Meng-override |
+| Header | Jika dikirim | Jika tidak dikirim |
 |---|---|---|
-| `X-CLIENT-KEY` | `${PAYMENT_CHANNEL_ID}` | `CHANNEL-ID` + `X-CLIENT-KEY` (token) |
-| `X-TIMESTAMP` | `${PAYMENT_AUTH_TIMESTAMP}` | `X-TIMESTAMP` |
-| `X-EXTERNAL-ID` | `${PAYMENT_EXTERNAL_ID}` | `X-EXTERNAL-ID` |
+| `X-CLIENT-KEY` | Dipakai sebagai `CHANNEL-ID` + `X-CLIENT-KEY` (token) | Pakai default `payment.auth.*` |
+| `X-TIMESTAMP` | Dipakai sebagai `X-TIMESTAMP` | Pakai default `payment.auth.timestamp` |
+| `X-EXTERNAL-ID` | Dipakai sebagai `X-EXTERNAL-ID` | Pakai default `payment.auth.external-id` |
+
+> **Catatan:** Jika header override dikirim, cache token di-bypass — token baru di-fetch dengan kredensial yang di-override.
 
 ```bash
+# Dengan header custom
 curl --request GET \
   --url http://localhost:8081/api/v1/bill/health \
   --header 'X-CLIENT-KEY: KPBW' \
   --header 'X-TIMESTAMP: 2026-08-01T10:30:00+07:00' \
   --header 'X-EXTERNAL-ID: KPBW'
+
+# Tanpa header (pakai default dari config)
+curl --request GET --url http://localhost:8081/api/v1/bill/health
 ```
 
 **Response Sukses (200):**
@@ -156,89 +201,140 @@ curl --request GET \
 }
 ```
 
-_Response body bersifat dinamis — dikembalikan apa adanya dari upstream `/v2/bill/healthz`._
+**Response Timeout (504 Gateway Timeout):**
+
+```json
+{
+  "timestamp": "2026-08-01 10:30:00",
+  "status": 504,
+  "error": "Gateway Timeout",
+  "message": "Token endpoint returned HTTP 400: ...",
+  "path": "/api/v1/bill/health"
+}
+```
+
+### 3. Bill Inquiry (`/inquiry`)
+
+```
+POST /api/v1/bill/inquiry
+Content-Type: application/json
+```
+
+Memeriksa tagihan pelanggan — meneruskan request ke upstream `/v2/bill/inquiry`. Semua _field_ dikirim apa adanya.
+
+```bash
+curl --request POST \
+  --url http://localhost:8081/api/v1/bill/inquiry \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "partnerServiceId": "04602",
+    "customerNo": "0226016324",
+    "virtualAccountNo": "046020226016324",
+    "channelCode": 6011,
+    "language": "ID",
+    "sourceBankCode": "008",
+    "inquiryRequestId": "REQ-001",
+    "additionalInfo": {
+      "deviceId": "BSIUII"
+    }
+  }'
+```
+
+**Response Sukses (200):**
+
+```json
+{
+  "responseCode": "00",
+  "responseMessage": "Success"
+}
+```
+
+**Response Timeout (504):**
+
+```json
+{
+  "timestamp": "2026-08-01 10:30:00",
+  "status": 504,
+  "error": "Gateway Timeout",
+  "message": "I/O error on POST request for \"...\": Read timed out",
+  "path": "/api/v1/bill/inquiry"
+}
+```
 
 ## Alur Autentikasi
 
+Paymently menggunakan **OAuth2 Client Credentials** untuk mengakses upstream API:
+
 ```
-1. Aplikasi internal → POST /api/v1/bill/inquiry
-2. Paymently → POST /v1.0/access-token/b2b   (minta token OAuth2)
-3. Upstream → {"accessToken":"...", "expiresIn":"3600"}
-4. Paymently → cache token di memori (berlaku ~59 menit)
-5. Paymently → POST /v2/bill/inquiry           (pakai token dari cache)
-6. Upstream → {"responseCode":"00", ...}
-7. Paymently → 200 OK ke aplikasi internal
+1. Request masuk → POST /api/v1/bill/inquiry (atau GET /health)
+2. Paymently cek cache token → kalau masih valid, langsung pakai (skip step 3-5)
+3. Paymently → POST /v1.0/access-token/b2b/
+     Headers: X-CLIENT-KEY, X-SIGNATURE, X-TIMESTAMP, X-EXTERNAL-ID
+     Body:   {"grantType":"client_credentials"}
+4. Upstream → {"accessToken":"...","tokenType":"Bearer","expiresIn":"3600"}
+5. Token di-cache di memori dengan buffer 60 detik sebelum expiry
+6. Paymently → POST /v2/bill/inquiry
+     Headers: Authorization: Bearer <token>, CHANNEL-ID, X-PARTNER-ID, X-SIGNATURE, ...
+7. Response dikembalikan ke pemanggil
 ```
 
-Pada permintaan berikutnya, langkah 2–3 dilewati selama token di _cache_ masih berlaku.
+Token di-cache secara _in-memory_ (`volatile` String + `Instant` expiry) dan otomatis di-refresh saat mendekati expiry. Jika client mengirim header override (`X-CLIENT-KEY`, dll), **cache di-bypass** dan token baru di-fetch.
 
 ## Monitoring & Dashboard
 
-Paymently menyediakan _cron job_ untuk memonitor endpoint healthz secara berkala beserta dashboard HTML untuk melihat hasilnya.
+Paymently menyertakan _cron job_ + dashboard HTML untuk memonitor healthz endpoint secara berkala.
 
-### Menjalankan Cron Job
+### Dashboard
 
-Cron job berjalan di dalam sesi Claude Code. Minta Claude untuk menjalankannya:
+Dashboard menampilkan statistik health check secara _real-time_ di **http://localhost:9090**:
 
-```
-jalankan cron setiap 3 menit untuk curl healthz dengan header X-CLIENT-KEY: KPBW,
-X-TIMESTAMP: 2026-08-01T10:30:00+07:00, X-EXTERNAL-ID: KPBW, log hasilnya ke
-logs/healthz-monitor.log
-```
-
-Atau gunakan _loop mode_:
-
-```
-/loop 3m ./healthz-check.sh
-```
-
-### Menghentikan Cron Job
-
-Cukup minta Claude untuk menghentikan cron:
-
-```
-stop cron healthz
-```
-
-Atau matikan Claude Code session untuk menghentikan semua cron sekaligus.
-
-### Menjalankan Dashboard
-
-```bash
-# Start monitor server (port 9090)
-python3 monitor-server.py &
-
-# Buka di browser
-open http://localhost:9090
-```
-
-Dashboard menampilkan:
 - **Live status dot** — hijau (UP) / merah (DOWN)
-- **Stat tiles** — Total Checks, Success (dengan uptime %), Failure
-- **Last check bar** — HTTP code + pesan error dari response terakhir
+- **3 stat tiles** — Total Checks, Success (uptime %), Failure
+- **Last check bar** — HTTP code + pesan response terakhir
 - **Failures table** — 20 kegagalan terakhir: timestamp, HTTP code, pesan
 - **Recent checks** — 10 pengecekan terakhir
 - **Dark mode** — toggle ☀︎/☾, auto-detect OS preference
 - **Auto-refresh** — fetch data setiap 30 detik
 
-### Menghentikan Dashboard
-
 ```bash
-# Cari PID proses monitor server
+# Jalankan server monitor (port 9090)
+python3 monitor-server.py &
+
+# Buka di browser
+open http://localhost:9090
+
+# API stats & logs
+curl -s http://localhost:9090/api/stats | python3 -m json.tool
+curl -s http://localhost:9090/api/logs  | python3 -m json.tool
+
+# Hentikan server
 lsof -ti:9090 | xargs kill
 ```
 
-### Menjalankan Health Check Manual
+### Menjadwalkan Cron Health Check
+
+Minta Claude untuk menjalankan cron:
+
+```
+jalankan cron setiap 3 menit untuk curl healthz ke logs/healthz-monitor.log
+```
+
+Atau _loop mode_:
+
+```
+/loop 3m ./healthz-check.sh
+```
+
+Untuk menghentikan: **"stop cron healthz"**.
+
+### Health Check Manual
 
 ```bash
-# Sekali jalan — hasil di-append ke log
+# Sekali jalan — hasil di-append ke logs/healthz-monitor.log
 ./healthz-check.sh
 
 # Lihat log
 cat logs/healthz-monitor.log
-
-# Lihat statistik via API
-curl -s http://localhost:9090/api/stats | python3 -m json.tool
 ```
 
 ### Format Log
@@ -247,10 +343,10 @@ Setiap baris di `logs/healthz-monitor.log` adalah JSON:
 
 ```json
 {"time":"2026-08-01T13:57:23Z","status":"success","httpCode":200,"body":{"status":"OK"}}
-{"time":"2026-08-01T13:58:00Z","status":"failure","httpCode":504,"body":{"error":"Gateway Timeout","message":"..."}}
+{"time":"2026-08-01T14:00:00Z","status":"failure","httpCode":504,"body":{"error":"Gateway Timeout","message":"..."}}
 ```
 
-### Struktur File Monitoring
+### File Monitoring
 
 ```
 ├── healthz-check.sh          # Script curl → log JSON line
@@ -263,36 +359,84 @@ Setiap baris di `logs/healthz-monitor.log` adalah JSON:
 ## Pengujian
 
 ```bash
+# Semua test
 mvn test
 
-# Satu kelas pengujian
+# Satu kelas
 mvn test -Dtest=PaymentMiddlewareServiceTest
 
-# Satu metode pengujian
+# Satu metode
 mvn test -Dtest=PaymentMiddlewareServiceTest#shouldReturnHealthz
+
+# Build tanpa test
+mvn clean package -DskipTests
 ```
 
-Pengujian integrasi menggunakan WireMock untuk menyimulasikan upstream API, termasuk skenario _timeout_ (token endpoint dan inquiry endpoint).
+### Cakupan Test
+
+| Test | Tipe | Cakupan |
+|---|---|---|
+| `RestTemplateConfigTest` | Integrasi | Verifikasi bean RestTemplate menggunakan Apache HttpClient 5 |
+| `PaymentMiddlewareServiceTest` | Integrasi (WireMock) | 4 skenario: inquiry sukses, inquiry timeout, healthz sukses, token timeout |
+
+Test integrasi menggunakan **WireMock** (standalone, dynamic port) untuk menyimulasikan upstream API. `@DynamicPropertySource` meng-override `payment.api.*` agar mengarah ke WireMock. Test config berada di `src/test/resources/application.yml` dengan nilai dummy yang aman.
+
+## Logging
+
+Log dalam format **JSON** (Logstash Logback Encoder 8.0), output ke:
+
+| Output | Path | Level |
+|---|---|---|
+| Console | stdout | `com.uii.paymently: DEBUG`, `org.apache.http: INFO` |
+| Main log | `logs/paymently.json` | Rolling file, semua event |
+| Healthz events | `logs/payment.json` | Khusus logger `payment.healthz` |
+
+Header `Authorization` otomatis di-redact di log (diganti `Bearer ****`).
+
+## Teknologi
+
+| Teknologi | Keterangan |
+|---|---|
+| Java 21 | Runtime |
+| Spring Boot 3.4.1 | Framework |
+| Apache HttpClient 5 | HTTP client (_connection pooling_: max 20 total, 10 per route) |
+| WireMock 3.9 | HTTP stub untuk pengujian integrasi |
+| Logstash Logback 8.0 | _Structured JSON logging_ |
+| Lombok | _Boilerplate_ reduction (builder, data, constructor) |
+| Maven | Build tool |
 
 ## Struktur Proyek
 
 ```
 src/main/java/com/uii/paymently/
-├── PaymentlyApplication.java       # Entry point
+├── PaymentlyApplication.java          # Entry point
 ├── config/
-│   └── RestTemplateConfig.java     # Bean RestTemplate (Apache HttpClient 5)
+│   └── RestTemplateConfig.java        # Bean RestTemplate (Apache HttpClient 5)
 ├── controller/
-│   └── BillController.java         # REST endpoints
+│   └── BillController.java            # 3 endpoint: healthz, health, inquiry
 ├── dto/
-│   ├── AccessTokenRequest.java     # OAuth2 request body
-│   ├── AccessTokenResponse.java    # OAuth2 response body
-│   ├── AdditionalInfo.java         # Nested DTO
-│   ├── BillInquiryRequest.java     # Request body bill inquiry
-│   ├── BillInquiryResponse.java    # Response body bill inquiry
-│   └── ErrorResponse.java          # Standard error envelope
+│   ├── AccessTokenRequest.java        # OAuth2 request body
+│   ├── AccessTokenResponse.java       # OAuth2 response body
+│   ├── AdditionalInfo.java            # Nested DTO (deviceId)
+│   ├── BillInquiryRequest.java        # Request body bill inquiry
+│   ├── BillInquiryResponse.java       # Response body bill inquiry
+│   └── ErrorResponse.java             # Standard error envelope
 ├── exception/
-│   └── GlobalExceptionHandler.java # 504 & 500 handler
+│   └── GlobalExceptionHandler.java    # 504 & 500 handler
 └── service/
-    ├── PaymentMiddlewareService.java # Logika utama proxy
-    └── TokenService.java             # OAuth2 token fetching + cache
+    ├── PaymentMiddlewareService.java  # Proxy bill inquiry + health
+    └── TokenService.java              # OAuth2 token + in-memory cache
+
+src/test/
+├── java/com/uii/paymently/
+│   ├── config/RestTemplateConfigTest.java
+│   └── service/PaymentMiddlewareServiceTest.java
+└── resources/
+    └── application.yml                # Test config (nilai dummy)
+
+├── healthz-check.sh                   # Monitoring: curl script
+├── monitor-server.py                  # Monitoring: dashboard server
+├── dashboard.html                     # Monitoring: dashboard UI
+├── application-example.yml            # Template konfigurasi
+└── CLAUDE.md                          # Petunjuk Claude Code
 ```
