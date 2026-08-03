@@ -33,10 +33,32 @@
         </encoder>
     </appender>
 
+    <!-- File log khusus untuk event healthz -->
+    <appender name="FILE_HEALTHZ_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/payment.json</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/payment.%d{yyyy-MM-dd}.json</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <thread>thread</thread>
+                <message>log_message</message>
+                <level>level</level>
+            </fieldNames>
+            <timestampPattern>yyyy-MM-dd HH:mm:ss</timestampPattern>
+        </encoder>
+    </appender>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE_JSON" />
         <appender-ref ref="FILE_JSON" />
     </root>
+
+    <logger name="payment.healthz" level="INFO" additivity="false">
+        <appender-ref ref="FILE_HEALTHZ_JSON" />
+    </logger>
 
     <logger name="com.uii.paymently" level="DEBUG"/>
     <logger name="com.uii.paymently.service" level="DEBUG"/>
