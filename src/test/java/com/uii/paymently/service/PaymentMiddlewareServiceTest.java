@@ -6,11 +6,14 @@ import com.uii.paymently.dto.AdditionalInfo;
 import com.uii.paymently.dto.BillInquiryRequest;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
+import org.springframework.web.client.ResourceAccessException;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,6 +30,9 @@ class PaymentMiddlewareServiceTest {
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("payment.api.base-url", () -> wireMockServer.baseUrl());
+        registry.add("payment.api.access-token-path", () -> "/v1.0/access-token/b2b/");
+        registry.add("payment.api.inquiry-path", () -> "/v2/bill/inquiry");
+        registry.add("payment.api.healthz-path", () -> "/v2/bill/healthz");
     }
 
     @BeforeAll
@@ -38,6 +44,16 @@ class PaymentMiddlewareServiceTest {
     @AfterAll
     static void stopWireMock() {
         wireMockServer.stop();
+    }
+
+    @BeforeEach
+    void stubAccessToken() {
+        // Default: access token endpoint selalu return sukses
+        wireMockServer.stubFor(post(urlEqualTo("/v1.0/access-token/b2b/"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accessToken\":\"mock-access-token\",\"tokenType\":\"Bearer\",\"expiresIn\":\"3600\"}")));
     }
 
     @Test
@@ -61,11 +77,10 @@ class PaymentMiddlewareServiceTest {
                 .additionalInfo(AdditionalInfo.builder().deviceId("BSIUII").build())
                 .build();
 
-        // Harus throw RuntimeException karena timeout
+        // Harus throw ResourceAccessException karena timeout
         assertThatThrownBy(() -> service.inquiryBill(request))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Connect to")
-                .hasMessageContaining("failed");
+                .isInstanceOf(ResourceAccessException.class)
+                .hasMessageContaining("Read timed out");
     }
 
     @Test
@@ -90,5 +105,37 @@ class PaymentMiddlewareServiceTest {
         var response = service.inquiryBill(request);
         assertThat(response.getResponseCode()).isEqualTo("00");
         assertThat(response.getResponseMessage()).isEqualTo("Success");
+    }
+
+    @Test
+    void shouldReturnHealthz() {
+        wireMockServer.stubFor(get(urlEqualTo("/v2/bill/healthz"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"status\":\"UP\"}")));
+
+        var response = service.healthz();
+        assertThat(response).containsEntry("status", "UP");
+    }
+
+    @Test
+    void shouldThrowExceptionOnTokenTimeout() {
+        // Reset semua stub, lalu ganti token endpoint dengan delay > read timeout
+        wireMockServer.resetAll();
+        wireMockServer.stubFor(post(urlEqualTo("/v1.0/access-token/b2b/"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accessToken\":\"x\"}")
+                        .withFixedDelay(25000)));  // 25 detik
+
+        BillInquiryRequest request = BillInquiryRequest.builder()
+                .customerNo("0226016324")
+                .build();
+
+        assertThatThrownBy(() -> service.inquiryBill(request))
+                .isInstanceOf(ResourceAccessException.class)
+                .hasMessageContaining("Read timed out");
     }
 }
