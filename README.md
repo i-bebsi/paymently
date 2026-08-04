@@ -377,28 +377,12 @@ lsof -ti:9090 | xargs kill
 
 ### Uptime Kuma (External Monitoring)
 
-[Uptime Kuma](https://uptime-kuma.io/) adalah monitoring eksternal yang berjalan di Docker dan secara berkala mengecek endpoint API. Mendukung 90+ notifikasi (Telegram, Discord, Slack, Email, dll).
+Uptime Kuma dikelola di project terpisah: **`/Users/bsi-2500011/Project/AI/uptime_kuma/`**
 
 ```bash
-# Start Uptime Kuma (pastikan Docker Desktop berjalan)
+cd /Users/bsi-2500011/Project/AI/uptime_kuma
 docker compose up -d
-
-# Buka dashboard
 open http://localhost:3001
-```
-
-**Setup awal:** Buka `http://localhost:3001` → buat admin account → tambah monitor:
-
-| Monitor | URL | Interval |
-|---|---|---|
-| Paymently Liveness | `http://host.docker.internal:8081/api/v1/bill/healthz` | 60 detik |
-| Paymently Upstream | `http://host.docker.internal:8081/api/v1/bill/health` | 120 detik |
-
-> **Catatan:** `host.docker.internal` adalah alamat khusus di Docker Desktop macOS agar container bisa mengakses host.
-
-**Hentikan:**
-```bash
-docker compose down
 ```
 
 ## Pengujian
@@ -482,7 +466,9 @@ src/test/
 └── resources/
     └── application.yml                # Test config (nilai dummy)
 
-├── docker-compose.yml                 # Uptime Kuma container
+├── Dockerfile                         # Paymently container
+├── Dockerfile.dashboard               # Dashboard container
+├── docker-compose.paymently.yml       # Paymently + Dashboard
 ├── healthz-check.sh                   # Monitoring: curl script
 ├── monitor-server.py                  # Monitoring: dashboard server
 ├── dashboard.html                     # Monitoring: dashboard UI

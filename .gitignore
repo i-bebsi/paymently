@@ -15,6 +15,3 @@ logs/
 
 # Environment — kredensial
 .env
-
-# Uptime Kuma — data monitoring (SQLite)
-uptime-kuma-data/
