@@ -1,6 +1,5 @@
 # ==============================================================
 # TEMPLATE — Copy ke src/main/resources/application.yml
-# dan isi dengan kredensial yang sebenarnya.
 # ==============================================================
 server:
   port: 8081

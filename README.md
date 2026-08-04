@@ -9,6 +9,9 @@
 cp .env.example .env
 # Edit .env — isi semua PAYMENT_* variable
 
+cp application-example.yml src/main/resources/application.yml
+# Biarkan apa adanya
+
 # 2. Jalankan
 docker compose -f docker-compose.paymently.yml up -d --build
 
