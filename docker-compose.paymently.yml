@@ -20,3 +20,17 @@ services:
       - PAYMENT_EXTERNAL_ID=${PAYMENT_EXTERNAL_ID}
       - PAYMENT_SIGNATURE=${PAYMENT_SIGNATURE}
       - PAYMENT_AUTH_TIMESTAMP=${PAYMENT_AUTH_TIMESTAMP}
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: paymently-dashboard
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    environment:
+      - PORT=9090
+      - PAYMENTLY_URL=http://paymently:8081
+    depends_on:
+      - paymently

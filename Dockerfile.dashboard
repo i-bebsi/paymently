@@ -1,0 +1,5 @@
+FROM python:3-alpine
+WORKDIR /app
+COPY monitor-server.py dashboard.html ./
+EXPOSE 9090
+CMD ["python3", "monitor-server.py"]

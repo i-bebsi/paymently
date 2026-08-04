@@ -1,0 +1,7 @@
+target/
+logs/
+uptime-kuma-data/
+.git/
+.idea/
+*.iml
+.DS_Store

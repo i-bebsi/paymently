@@ -10,7 +10,8 @@ import urllib.request
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
-PORT = 9090
+PORT = int(os.environ.get("PORT", "9090"))
+PAYMENTLY_URL = os.environ.get("PAYMENTLY_URL", "http://localhost:8081")
 LOG_FILE = Path(__file__).parent / "logs" / "healthz-monitor.log"
 HTML_FILE = Path(__file__).parent / "dashboard.html"
 
@@ -82,7 +83,7 @@ class MonitorHandler(SimpleHTTPRequestHandler):
     def _proxy_requests(self):
         """Proxy request log dari Paymently API."""
         try:
-            req = urllib.request.Request("http://localhost:8081/api/v1/bill/requests")
+            req = urllib.request.Request(f"{PAYMENTLY_URL}/api/v1/bill/requests")
             with urllib.request.urlopen(req, timeout=5) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except Exception as e:
