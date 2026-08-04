@@ -11,14 +11,10 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 @Component
 public class RequestLogStore {
 
-    private static final int MAX_ENTRIES = 200;
     private final Deque<RequestLogEntry> entries = new ConcurrentLinkedDeque<>();
 
     public void add(RequestLogEntry entry) {
         entries.addFirst(entry);
-        while (entries.size() > MAX_ENTRIES) {
-            entries.pollLast();
-        }
     }
 
     public List<RequestLogEntry> getAll() {
