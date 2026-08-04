@@ -119,7 +119,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
         if (uri.startsWith("/api/v1/bill/inquiry")) {
             return UPSTREAM_BASE + "/v2/bill/inquiry";
         }
-        if (uri.startsWith("/api/v1/bill/health")) {
+        if (uri.startsWith("/api/v1/bill/healthz")) {
             return UPSTREAM_BASE + "/v2/bill/healthz";
         }
         return null;

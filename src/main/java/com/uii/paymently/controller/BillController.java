@@ -26,16 +26,8 @@ public class BillController {
     private final PaymentMiddlewareService middlewareService;
     private final RequestLogStore requestLogStore;
 
-    @GetMapping("/healthz")
-    public ResponseEntity<Map<String, String>> healthz(HttpServletRequest request) {
-        log.info("Healthz request received: method={}, path={}, remoteAddr={}",
-                request.getMethod(),
-                request.getRequestURI(),
-                request.getRemoteAddr());
-        HEALTHZ_LOGGER.info("Healthz request received: method={}, path={}, remoteAddr={}",
-                request.getMethod(),
-                request.getRequestURI(),
-                request.getRemoteAddr());
+    @GetMapping("/live")
+    public ResponseEntity<Map<String, String>> live(HttpServletRequest request) {
         return ResponseEntity.ok(Map.of(
                 "status", "UP",
                 "service", "paymently"
@@ -49,8 +41,8 @@ public class BillController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/health")
-    public ResponseEntity<Map<String, Object>> health(
+    @GetMapping("/healthz")
+    public ResponseEntity<Map<String, Object>> healthz(
             @RequestHeader(value = "X-CLIENT-KEY", required = false) String clientKey,
             @RequestHeader(value = "X-TIMESTAMP", required = false) String timestamp,
             @RequestHeader(value = "X-EXTERNAL-ID", required = false) String externalId) {

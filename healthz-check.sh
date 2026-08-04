@@ -13,7 +13,7 @@ mkdir -p "$LOG_DIR"
 # Jalankan curl: body → file, HTTP code → file
 HTTP_CODE=$(curl -s -w '%{http_code}' \
   --request GET \
-  --url http://localhost:8081/api/v1/bill/health \
+  --url http://localhost:8081/api/v1/bill/healthz \
   --header 'X-CLIENT-KEY: KPBW' \
   --header 'X-TIMESTAMP: 2026-08-01T10:30:00+07:00' \
   --header 'X-EXTERNAL-ID: KPBW' \
