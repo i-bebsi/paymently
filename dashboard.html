@@ -332,6 +332,11 @@
   </table>
 
   <div class="section-title">Request Log <span style="font-weight:400;font-size:12px" id="reqCount"></span></div>
+  <div class="pagination" style="margin-bottom:6px">
+    <input type="search" id="reqSearch" placeholder="Search path, method, IP, status…" oninput="onSearch()"
+      style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;
+             background:var(--surface-1);color:var(--text-primary);font-size:12px">
+  </div>
   <div class="pagination" id="pagination">
     <span>
       Show
@@ -369,6 +374,9 @@ let allFailures = [];
 let failCurrentPage = 1;
 let failPageSize = 10;
 let failTotalPages = 1;
+
+let searchQuery = '';
+let filteredEntries = [];
 
 const root = document.querySelector('.viz-root');
 const btn = document.getElementById('themeToggle');
@@ -423,6 +431,27 @@ function changePageSize() {
   updatePagination();
 }
 
+function onSearch() {
+  searchQuery = document.getElementById('reqSearch').value.toLowerCase().trim();
+  applyFilter();
+  currentPage = 1;
+  renderRequestTable();
+  updatePagination();
+}
+
+function applyFilter() {
+  if (!searchQuery) {
+    filteredEntries = allEntries;
+  } else {
+    filteredEntries = allEntries.filter(r =>
+      (r.uri || '').toLowerCase().includes(searchQuery) ||
+      (r.method || '').toLowerCase().includes(searchQuery) ||
+      (r.clientIp || '').toLowerCase().includes(searchQuery) ||
+      String(r.responseStatus).includes(searchQuery)
+    );
+  }
+}
+
 /* ── Failure pagination ── */
 function goFailPage(p) {
   if (p < 1 || p > failTotalPages) return;
@@ -471,6 +500,7 @@ function renderFailTable() {
     </tr>
     <tr class="req-detail" id="${detailId}">
       <td colspan="6">
+        ${r.upstreamUrl ? `<span class="dlabel">Upstream URL: </span><code style="color:var(--seq-400)">${escapeHtml(r.upstreamUrl)}</code><br><br>` : ''}
         <span class="dlabel">Request Headers:</span>
         <pre>${escapeHtml(JSON.stringify(r.requestHeaders, null, 2))}</pre>
         <span class="dlabel">Request Body:</span>
@@ -485,7 +515,7 @@ function renderFailTable() {
 }
 
 function updatePagination() {
-  totalPages = Math.max(1, Math.ceil(allEntries.length / pageSize));
+  totalPages = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
   document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
   document.getElementById('btnFirst').disabled = currentPage <= 1;
   document.getElementById('btnPrev').disabled = currentPage <= 1;
@@ -495,7 +525,7 @@ function updatePagination() {
 
 function renderRequestTable() {
   const start = (currentPage - 1) * pageSize;
-  const page = allEntries.slice(start, start + pageSize);
+  const page = filteredEntries.slice(start, start + pageSize);
   const rb = document.getElementById('requestBody');
 
   if (page.length === 0) {
@@ -519,6 +549,7 @@ function renderRequestTable() {
     </tr>
     <tr class="req-detail" id="${detailId}">
       <td colspan="7">
+        ${r.upstreamUrl ? `<span class="dlabel">Upstream URL: </span><code style="color:var(--seq-400)">${escapeHtml(r.upstreamUrl)}</code><br><br>` : ''}
         <span class="dlabel">Request Headers:</span>
         <pre>${escapeHtml(JSON.stringify(r.requestHeaders, null, 2))}</pre>
         <span class="dlabel">Request Body:</span>
@@ -576,7 +607,9 @@ function renderAll(entries) {
   updateFailPagination();
 
   /* Request Log + pagination */
-  document.getElementById('reqCount').textContent = total > 0 ? `(${total})` : '';
+  applyFilter();
+  document.getElementById('reqCount').textContent = filteredEntries.length > 0
+    ? (searchQuery ? `(${filteredEntries.length} of ${total})` : `(${total})`) : '';
   currentPage = 1;
   renderRequestTable();
   updatePagination();

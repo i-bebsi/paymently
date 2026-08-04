@@ -83,12 +83,15 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
                 ? truncate(new String(resBody, StandardCharsets.UTF_8))
                 : "";
 
+        String uri = req.getRequestURI() +
+                (req.getQueryString() != null ? "?" + req.getQueryString() : "");
+
         return RequestLogStore.RequestLogEntry.builder()
                 .timestamp(Instant.now())
                 .clientIp(getClientIp(req))
                 .method(req.getMethod())
-                .uri(req.getRequestURI() +
-                        (req.getQueryString() != null ? "?" + req.getQueryString() : ""))
+                .uri(uri)
+                .upstreamUrl(mapUpstreamUrl(uri))
                 .requestHeaders(reqHeaders)
                 .requestBody(reqBodyStr)
                 .responseStatus(res.getStatus())
@@ -108,6 +111,18 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             return xRealIp;
         }
         return request.getRemoteAddr();
+    }
+
+    private static final String UPSTREAM_BASE = "https://payment.uii.ac.id";
+
+    private String mapUpstreamUrl(String uri) {
+        if (uri.startsWith("/api/v1/bill/inquiry")) {
+            return UPSTREAM_BASE + "/v2/bill/inquiry";
+        }
+        if (uri.startsWith("/api/v1/bill/health")) {
+            return UPSTREAM_BASE + "/v2/bill/healthz";
+        }
+        return null;
     }
 
     private String truncate(String s) {

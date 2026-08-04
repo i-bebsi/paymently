@@ -36,6 +36,7 @@ public class RequestLogStore {
         private String clientIp;
         private String method;
         private String uri;
+        private String upstreamUrl;
         private Map<String, String> requestHeaders;
         private String requestBody;
         private int responseStatus;
