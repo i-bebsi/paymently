@@ -2,6 +2,10 @@ package com.uii.paymently.controller;
 
 import com.uii.paymently.dto.BillInquiryRequest;
 import com.uii.paymently.dto.BillInquiryResponse;
+import com.uii.paymently.dto.PaymentRequest;
+import com.uii.paymently.dto.PaymentResponse;
+import com.uii.paymently.dto.ReverseRequest;
+import com.uii.paymently.dto.ReverseResponse;
 import com.uii.paymently.filter.RequestLogStore;
 import com.uii.paymently.service.PaymentMiddlewareService;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +42,22 @@ public class BillController {
     public ResponseEntity<?> inquiryBill(@RequestBody BillInquiryRequest request) {
         log.info("Received bill inquiry request: customerNo={}", request.getCustomerNo());
         BillInquiryResponse response = middlewareService.inquiryBill(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/payment")
+    public ResponseEntity<?> paymentBill(@RequestBody PaymentRequest request) {
+        log.info("Received bill payment request: customerNo={}, virtualAccountNo={}",
+                request.getCustomerNo(), request.getVirtualAccountNo());
+        PaymentResponse response = middlewareService.paymentBill(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/reverse")
+    public ResponseEntity<?> reverseBill(@RequestBody ReverseRequest request) {
+        log.info("Received bill reverse request: customerNo={}, paymentRequestId={}",
+                request.getCustomerNo(), request.getPaymentRequestId());
+        ReverseResponse response = middlewareService.reverseBill(request);
         return ResponseEntity.ok(response);
     }
 

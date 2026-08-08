@@ -6,6 +6,7 @@ payment:
     access-token-path: /v1.0/access-token/b2b/
     inquiry-path: /v2/bill/inquiry
     payment-path: /v2/bill/payment
+    reverse-path: /v2/bill/reverse
     healthz-path: /v2/bill/healthz
     connect-timeout: 2s
     read-timeout: 20s

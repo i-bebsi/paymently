@@ -2,6 +2,10 @@ package com.uii.paymently.service;
 
 import com.uii.paymently.dto.BillInquiryRequest;
 import com.uii.paymently.dto.BillInquiryResponse;
+import com.uii.paymently.dto.PaymentRequest;
+import com.uii.paymently.dto.PaymentResponse;
+import com.uii.paymently.dto.ReverseRequest;
+import com.uii.paymently.dto.ReverseResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,6 +28,8 @@ public class PaymentMiddlewareService {
     private final String baseUrl;
     private final String inquiryPath;
     private final String healthzPath;
+    private final String paymentPath;
+    private final String reversePath;
     private final String channelId;
     private final String partnerId;
     private final String externalId;
@@ -36,6 +42,8 @@ public class PaymentMiddlewareService {
             @Value("${payment.api.base-url}") String baseUrl,
             @Value("${payment.api.inquiry-path}") String inquiryPath,
             @Value("${payment.api.healthz-path:/v2/bill/healthz}") String healthzPath,
+            @Value("${payment.api.payment-path}") String paymentPath,
+            @Value("${payment.api.reverse-path}") String reversePath,
             @Value("${payment.auth.channel-id}") String channelId,
             @Value("${payment.auth.partner-id}") String partnerId,
             @Value("${payment.auth.external-id}") String externalId,
@@ -46,6 +54,8 @@ public class PaymentMiddlewareService {
         this.baseUrl = baseUrl;
         this.inquiryPath = inquiryPath;
         this.healthzPath = healthzPath;
+        this.paymentPath = paymentPath;
+        this.reversePath = reversePath;
         this.channelId = channelId;
         this.partnerId = partnerId;
         this.externalId = externalId;
@@ -86,6 +96,80 @@ public class PaymentMiddlewareService {
             log.error("Upstream inquiry error: HTTP {} — {}", e.getStatusCode().value(), responseBody);
             throw new ResourceAccessException(
                     String.format("Upstream inquiry returned HTTP %s: %s",
+                            e.getStatusCode().value(), responseBody));
+        }
+    }
+
+    /**
+     * Hit bill payment API.
+     * Saat timeout/connection error, log detail dan throw runtime exception.
+     */
+    public PaymentResponse paymentBill(PaymentRequest request) {
+        String url = baseUrl + paymentPath;
+
+        try {
+            HttpHeaders headers = buildCommonHeaders();
+            HttpEntity<PaymentRequest> entity = new HttpEntity<>(request, headers);
+
+            log.debug("=== HEADER ===");
+            headers.forEach((key, value) -> log.debug("{}: {}",
+                    key, key.equalsIgnoreCase("Authorization") ? "Bearer ****" : value));
+            log.debug("=== URL {} ===", url);
+
+            ResponseEntity<PaymentResponse> response =
+                    restTemplate.exchange(url, HttpMethod.POST, entity, PaymentResponse.class);
+            log.info("Payment success: code={}, message={}",
+                    response.getBody() != null ? response.getBody().getResponseCode() : "null",
+                    response.getBody() != null ? response.getBody().getResponseMessage() : "null");
+            return response.getBody();
+        } catch (ResourceAccessException e) {
+            Throwable rootCause = e.getRootCause() != null ? e.getRootCause() : e;
+            String errorDetail = buildTimeoutErrorMessage(url, rootCause);
+            log.error(errorDetail);
+            log.debug("Full stacktrace", e);
+            throw e; // propagate asli agar GlobalExceptionHandler → 504
+        } catch (RestClientResponseException e) {
+            String responseBody = e.getResponseBodyAsString();
+            log.error("Upstream payment error: HTTP {} — {}", e.getStatusCode().value(), responseBody);
+            throw new ResourceAccessException(
+                    String.format("Upstream payment returned HTTP %s: %s",
+                            e.getStatusCode().value(), responseBody));
+        }
+    }
+
+    /**
+     * Hit bill reverse API.
+     * Saat timeout/connection error, log detail dan throw runtime exception.
+     */
+    public ReverseResponse reverseBill(ReverseRequest request) {
+        String url = baseUrl + reversePath;
+
+        try {
+            HttpHeaders headers = buildCommonHeaders();
+            HttpEntity<ReverseRequest> entity = new HttpEntity<>(request, headers);
+
+            log.debug("=== HEADER ===");
+            headers.forEach((key, value) -> log.debug("{}: {}",
+                    key, key.equalsIgnoreCase("Authorization") ? "Bearer ****" : value));
+            log.debug("=== URL {} ===", url);
+
+            ResponseEntity<ReverseResponse> response =
+                    restTemplate.exchange(url, HttpMethod.POST, entity, ReverseResponse.class);
+            log.info("Reverse success: code={}, message={}",
+                    response.getBody() != null ? response.getBody().getResponseCode() : "null",
+                    response.getBody() != null ? response.getBody().getResponseMessage() : "null");
+            return response.getBody();
+        } catch (ResourceAccessException e) {
+            Throwable rootCause = e.getRootCause() != null ? e.getRootCause() : e;
+            String errorDetail = buildTimeoutErrorMessage(url, rootCause);
+            log.error(errorDetail);
+            log.debug("Full stacktrace", e);
+            throw e; // propagate asli agar GlobalExceptionHandler → 504
+        } catch (RestClientResponseException e) {
+            String responseBody = e.getResponseBodyAsString();
+            log.error("Upstream reverse error: HTTP {} — {}", e.getStatusCode().value(), responseBody);
+            throw new ResourceAccessException(
+                    String.format("Upstream reverse returned HTTP %s: %s",
                             e.getStatusCode().value(), responseBody));
         }
     }

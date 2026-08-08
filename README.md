@@ -35,6 +35,8 @@ mvn spring-boot:run
 | `GET` | `/api/v1/bill/live` | Internal liveness — `{"status":"UP","service":"paymently"}` |
 | `GET` | `/api/v1/bill/healthz` | Upstream health proxy → `payment.uii.ac.id/v2/bill/healthz` |
 | `POST` | `/api/v1/bill/inquiry` | Bill inquiry proxy → `payment.uii.ac.id/v2/bill/inquiry` |
+| `POST` | `/api/v1/bill/payment` | Bill payment proxy → `payment.uii.ac.id/v2/bill/payment` |
+| `POST` | `/api/v1/bill/reverse` | Bill reversal proxy → `payment.uii.ac.id/v2/bill/reverse` |
 | `GET` | `/api/v1/bill/requests` | Request log (untuk dashboard) |
 
 ### Header Override (`/healthz`)
@@ -60,6 +62,49 @@ curl -X POST http://localhost:8081/api/v1/bill/inquiry \
   -d '{"customerNo":"0226016324"}'
 ```
 
+### Payment
+
+```bash
+curl -X POST http://localhost:8081/api/v1/bill/payment \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "partnerServiceId": "01945",
+    "customerNo": "0226032690",
+    "virtualAccountNo": "019450226032690",
+    "virtualAccountName": "Mahasiswa H2H",
+    "language": "ID",
+    "paymentRequestId": "0696a437-907a-4635-86c2-0df427e55de2",
+    "channelCode": "6017",
+    "sourceBankCode": "536",
+    "paidAmount": {"value": "10000.00", "currency": "IDR"},
+    "trxDateTime": "2026-08-08T07:41:29+07:00",
+    "totalAmount": {"value": "1.00", "currency": "IDR"},
+    "referenceNo": "481743469968101",
+    "journalNum": "87204",
+    "additionalInfo": "BSIUIIPAY0226032690"
+  }'
+```
+
+### Reverse
+
+```bash
+curl -X POST http://localhost:8081/api/v1/bill/reverse \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "partnerServiceId": "01945",
+    "customerNo": "0226032690",
+    "virtualAccountNo": "019450226032690",
+    "inquiryRequestId": "4ff5816e-5307-426d-8550-2f5f0e801957",
+    "paymentRequestId": "b6b46175-8a7d-4783-9778-45fb7e122385",
+    "originalPartnerReferenceNo": "102000000031571",
+    "originalReferenceNo": "BTNSY1_PAY_1758095290866",
+    "originalExternalId": "1758095290866",
+    "trxDateTime": "2026-08-08T07:41:29+07:00",
+    "language": "ID",
+    "amount": {"value": "1.00", "currency": "IDR"},
+    "additionalInfo": {"reason": "Customer request", "channel": "01"}
+  }'
+
 ## Konfigurasi
 
 Semua property di `application.yml` bisa di-override via env var (Spring Boot relaxed binding):
@@ -69,6 +114,8 @@ Semua property di `application.yml` bisa di-override via env var (Spring Boot re
 | `PAYMENT_API_BASE_URL` | — | Upstream base URL |
 | `PAYMENT_API_ACCESS_TOKEN_PATH` | — | OAuth2 token path |
 | `PAYMENT_API_INQUIRY_PATH` | — | Inquiry path |
+| `PAYMENT_API_PAYMENT_PATH` | `/v2/bill/payment` | Payment path |
+| `PAYMENT_API_REVERSE_PATH` | `/v2/bill/reverse` | Reverse path |
 | `PAYMENT_API_HEALTHZ_PATH` | `/v2/bill/healthz` | Health check path |
 | `PAYMENT_API_CONNECT_TIMEOUT` | `10s` | TCP connect timeout |
 | `PAYMENT_API_READ_TIMEOUT` | `20s` | Read timeout |
@@ -111,7 +158,7 @@ mvn test -Dtest=PaymentMiddlewareServiceTest
 mvn clean package -DskipTests
 ```
 
-WireMock integration test — 4 skenario: inquiry sukses, inquiry timeout, healthz sukses, token timeout.
+WireMock integration test — 8 skenario: inquiry sukses, inquiry timeout, healthz sukses, token timeout, payment sukses, payment timeout, reverse sukses, reverse timeout.
 
 ## Struktur Proyek
 
@@ -123,7 +170,7 @@ src/main/java/com/uii/paymently/
 │   ├── RequestLogStore.java          # In-memory + file persistence
 │   └── RequestLoggingFilter.java     # Tangkap request/response
 ├── service/
-│   ├── PaymentMiddlewareService.java # Proxy bill inquiry + health
+│   ├── PaymentMiddlewareService.java # Proxy inquiry, payment, reverse, health
 │   └── TokenService.java             # OAuth2 token + cache
 ├── dto/                              # Request/response POJOs
 └── exception/GlobalExceptionHandler.java
