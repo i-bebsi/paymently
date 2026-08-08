@@ -92,11 +92,8 @@ public class PaymentMiddlewareService {
             log.debug("Full stacktrace", e);
             throw e; // propagate asli agar GlobalExceptionHandler → 504
         } catch (RestClientResponseException e) {
-            String responseBody = e.getResponseBodyAsString();
-            log.error("Upstream inquiry error: HTTP {} — {}", e.getStatusCode().value(), responseBody);
-            throw new ResourceAccessException(
-                    String.format("Upstream inquiry returned HTTP %s: %s",
-                            e.getStatusCode().value(), responseBody));
+            log.error("Upstream inquiry error: HTTP {} — {}", e.getStatusCode().value(), e.getResponseBodyAsString());
+            throw e; // propagate asli agar GlobalExceptionHandler mengembalikan status code upstream
         }
     }
 
@@ -129,11 +126,8 @@ public class PaymentMiddlewareService {
             log.debug("Full stacktrace", e);
             throw e; // propagate asli agar GlobalExceptionHandler → 504
         } catch (RestClientResponseException e) {
-            String responseBody = e.getResponseBodyAsString();
-            log.error("Upstream payment error: HTTP {} — {}", e.getStatusCode().value(), responseBody);
-            throw new ResourceAccessException(
-                    String.format("Upstream payment returned HTTP %s: %s",
-                            e.getStatusCode().value(), responseBody));
+            log.error("Upstream payment error: HTTP {} — {}", e.getStatusCode().value(), e.getResponseBodyAsString());
+            throw e; // propagate asli agar GlobalExceptionHandler mengembalikan status code upstream
         }
     }
 
@@ -166,11 +160,8 @@ public class PaymentMiddlewareService {
             log.debug("Full stacktrace", e);
             throw e; // propagate asli agar GlobalExceptionHandler → 504
         } catch (RestClientResponseException e) {
-            String responseBody = e.getResponseBodyAsString();
-            log.error("Upstream reverse error: HTTP {} — {}", e.getStatusCode().value(), responseBody);
-            throw new ResourceAccessException(
-                    String.format("Upstream reverse returned HTTP %s: %s",
-                            e.getStatusCode().value(), responseBody));
+            log.error("Upstream reverse error: HTTP {} — {}", e.getStatusCode().value(), e.getResponseBodyAsString());
+            throw e; // propagate asli agar GlobalExceptionHandler mengembalikan status code upstream
         }
     }
 
@@ -215,11 +206,8 @@ public class PaymentMiddlewareService {
             log.debug("Full stacktrace", e);
             throw e; // propagate asli agar GlobalExceptionHandler → 504
         } catch (RestClientResponseException e) {
-            String responseBody = e.getResponseBodyAsString();
-            log.error("Upstream healthz error: HTTP {} — {}", e.getStatusCode().value(), responseBody);
-            throw new ResourceAccessException(
-                    String.format("Upstream healthz returned HTTP %s: %s",
-                            e.getStatusCode().value(), responseBody));
+            log.error("Upstream healthz error: HTTP {} — {}", e.getStatusCode().value(), e.getResponseBodyAsString());
+            throw e; // propagate asli agar GlobalExceptionHandler mengembalikan status code upstream
         }
     }
 

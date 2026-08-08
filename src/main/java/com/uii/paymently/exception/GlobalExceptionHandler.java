@@ -5,9 +5,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -35,6 +37,18 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT).body(body);
+    }
+
+    @ExceptionHandler(RestClientResponseException.class)
+    public ResponseEntity<String> handleUpstreamError(
+            RestClientResponseException e, HttpServletRequest req) {
+        log.error("Upstream returned HTTP {} for {}: {}",
+                e.getStatusCode().value(), req.getRequestURI(), e.getResponseBodyAsString());
+
+        return ResponseEntity
+                .status(e.getStatusCode().value())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(e.getResponseBodyAsString());
     }
 
     @ExceptionHandler(RuntimeException.class)

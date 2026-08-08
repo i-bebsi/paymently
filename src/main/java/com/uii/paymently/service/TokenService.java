@@ -28,6 +28,14 @@ public class TokenService {
     private volatile String cachedToken;
     private volatile Instant tokenExpiry = Instant.EPOCH;
 
+    /**
+     * Reset token cache (untuk testing).
+     */
+    void clearToken() {
+        cachedToken = null;
+        tokenExpiry = Instant.EPOCH;
+    }
+
     public TokenService(
             @Qualifier("paymentRestTemplate") RestTemplate restTemplate,
             @Value("${payment.api.base-url}") String baseUrl,

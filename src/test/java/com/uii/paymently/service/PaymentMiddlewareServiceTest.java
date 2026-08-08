@@ -19,6 +19,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import org.springframework.web.client.ResourceAccessException;
+import com.uii.paymently.service.TokenService;
+import org.springframework.web.client.RestClientResponseException;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +33,9 @@ class PaymentMiddlewareServiceTest {
 
     @Autowired
     private PaymentMiddlewareService service;
+
+    @Autowired
+    private TokenService tokenService;
 
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
@@ -128,8 +133,9 @@ class PaymentMiddlewareServiceTest {
 
     @Test
     void shouldThrowExceptionOnTokenTimeout() {
-        // Reset semua stub, lalu ganti token endpoint dengan delay > read timeout
+        // Reset semua stub + token cache, lalu ganti token endpoint dengan delay > read timeout
         wireMockServer.resetAll();
+        tokenService.clearToken();
         wireMockServer.stubFor(post(urlEqualTo("/v1.0/access-token/b2b/"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -240,5 +246,43 @@ class PaymentMiddlewareServiceTest {
         assertThatThrownBy(() -> service.reverseBill(request))
                 .isInstanceOf(ResourceAccessException.class)
                 .hasMessageContaining("Read timed out");
+    }
+
+    @Test
+    void shouldThrowRestClientResponseExceptionOnPayment400() {
+        wireMockServer.stubFor(post(urlEqualTo("/v2/bill/payment"))
+                .willReturn(aResponse()
+                        .withStatus(400)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"responseCode\":\"99\",\"responseMessage\":\"Invalid amount\"}")));
+
+        PaymentRequest request = PaymentRequest.builder()
+                .partnerServiceId("01945")
+                .customerNo("0226032690")
+                .build();
+
+        assertThatThrownBy(() -> service.paymentBill(request))
+                .isInstanceOf(RestClientResponseException.class)
+                .extracting("statusCode.value")
+                .isEqualTo(400);
+    }
+
+    @Test
+    void shouldThrowRestClientResponseExceptionOnReverse409() {
+        wireMockServer.stubFor(post(urlEqualTo("/v2/bill/reverse"))
+                .willReturn(aResponse()
+                        .withStatus(409)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"responseCode\":\"98\",\"responseMessage\":\"Transaction already reversed\"}")));
+
+        ReverseRequest request = ReverseRequest.builder()
+                .partnerServiceId("01945")
+                .customerNo("0226032690")
+                .build();
+
+        assertThatThrownBy(() -> service.reverseBill(request))
+                .isInstanceOf(RestClientResponseException.class)
+                .extracting("statusCode.value")
+                .isEqualTo(409);
     }
 }
