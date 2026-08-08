@@ -42,13 +42,32 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RestClientResponseException.class)
     public ResponseEntity<String> handleUpstreamError(
             RestClientResponseException e, HttpServletRequest req) {
+        String responseBody = e.getResponseBodyAsString();
         log.error("Upstream returned HTTP {} for {}: {}",
-                e.getStatusCode().value(), req.getRequestURI(), e.getResponseBodyAsString());
+                e.getStatusCode().value(), req.getRequestURI(), responseBody);
+
+        // Special case: upstream bilang "Tagihan sudah terbayar" → 200
+        if (isAlreadyPaid(responseBody)) {
+            log.info("Upstream returned 'Tagihan sudah terbayar', converting to 200 for {}",
+                    req.getRequestURI());
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(responseBody);
+        }
 
         return ResponseEntity
                 .status(e.getStatusCode().value())
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(e.getResponseBodyAsString());
+                .body(responseBody);
+    }
+
+    /**
+     * Cek apakah response body dari upstream mengandung pesan "Tagihan sudah terbayar".
+     */
+    private boolean isAlreadyPaid(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) return false;
+        return responseBody.contains("\"responseMessage\"")
+                && responseBody.contains("Tagihan sudah terbayar");
     }
 
     @ExceptionHandler(RuntimeException.class)

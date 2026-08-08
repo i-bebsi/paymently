@@ -268,6 +268,25 @@ class PaymentMiddlewareServiceTest {
     }
 
     @Test
+    void shouldThrowRestClientResponseExceptionOnAlreadyPaid404() {
+        wireMockServer.stubFor(post(urlEqualTo("/v2/bill/inquiry"))
+                .willReturn(aResponse()
+                        .withStatus(404)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"responseCode\":\"99\",\"responseMessage\":\"Tagihan sudah terbayar\"}")));
+
+        BillInquiryRequest request = BillInquiryRequest.builder()
+                .customerNo("0226032690")
+                .build();
+
+        // Service throws RestClientResponseException — GlobalExceptionHandler will convert to 200
+        assertThatThrownBy(() -> service.inquiryBill(request))
+                .isInstanceOf(RestClientResponseException.class)
+                .extracting("statusCode.value")
+                .isEqualTo(404);
+    }
+
+    @Test
     void shouldThrowRestClientResponseExceptionOnReverse409() {
         wireMockServer.stubFor(post(urlEqualTo("/v2/bill/reverse"))
                 .willReturn(aResponse()
