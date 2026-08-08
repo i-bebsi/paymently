@@ -104,6 +104,13 @@ curl -X POST http://localhost:8081/api/v1/bill/reverse \
     "amount": {"value": "1.00", "currency": "IDR"},
     "additionalInfo": {"reason": "Customer request", "channel": "01"}
   }'
+```
+
+## Error Handling
+
+Status code dari upstream **diteruskan apa adanya** ke client (bukan di-wrap jadi 504). Timeout/connection error → 504 Gateway Timeout.
+
+**Special case**: upstream return `"responseMessage": "Tagihan sudah terbayar"` (biasanya dengan status 404) → paymently meng-override jadi **200**, karena secara bisnis ini bukan error.
 
 ## Konfigurasi
 
